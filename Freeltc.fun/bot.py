@@ -1,45 +1,541 @@
-import base64, zlib, sys
+import ssl
+import certifi
+import requests
+import time
+import re
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+import logging
+from datetime import datetime
+import os
+import sys
+import getpass
+import json
+import random
 
-# Lambda decryption functions
-rev = lambda x: x[::-1]
-b64d = lambda x: base64.b64decode(x).decode()
-b64dd = lambda x: base64.b64decode(x)
-decompress = lambda x: zlib.decompress(base64.b64decode(x)).decode()
-xor_dec = lambda x, k: ''.join([chr(b ^ k) for b in base64.b64decode(x)])
-
-# Encrypted data and key
-data = 'Y1JERHljMU1tWXpOUVppTlhVaE5FY0ZXWUFBSzdreUxQQVZVQ2t4TkxVZ0pKQUZOUlVSVTdNQldLY3pGM0VWQlNKd1UwY3hMMkFUTW5zQUxWdEROdWNoQzA4eUszUUROMzhDSkVreE1TOXlVdlVpTXZrd0o3b3dJU2R6S3pRVE5RMEFVczRRRDJRUUt2RTFPc1VnTnZjVkNuc1RWWlFETmJjVEsza3pJcFVBT05rek9MZ0ZHdnN3S0tzREdvb2dBWElSVTBrQktUMUNMN2tET1g0Z04wRUZLVGR6Rms4QUIza3dDQWtRQk1zelZOSTFOQVV3VXowQVdrVVFDM0ExT05jalUwMFFGSWdEVjM4d01Ja0FON01WVm1BQUdzWUNBVTBRS3Mwd0xMUUFGWVppTG9zVEp5a2hCS0lRR2swd0FScFFPd0lCVU1NUVVqVXlOcGtRRDFVeE4yQUFWb3dBT1RkeU52Y1RDbGNEQXY4d0FWc1NVc3NoQ053eUxZSnlMU3NDTjdnUUJSOUNORkFGTDBNekRBMHlJTlVBTTdjek5SOVNLMmN6S2x3Q0RyWVROUVZGRERveU9Md3lFMDhBQXhNeUoxd3dPMjR5R3ZzeE1TaDFVcU0xS0xjVFVzWXlOUTBRS0RRbEE1QVFVRjh3TlFoRkREWVNDcE1ERU5ZQ0JrZ0ZONEV4TzFNakZWd3dMVGhGQ0VNek01Z0RLMzB3TldnekczQURWTThTVm5VQ05Sc3pHN2dBV204Q0dvY0RCWEl3VXZjVENTaGpVb1V6TFIxd0oxVXhKMVVRSm53Z0FzUVZVQzhDVjJBakNuTWxLWkFsSkRzaEYyVXdGWlJDQmpjVE91RVJETHdDRG5VREx5a1FKc016T2xVekNKUXpBUVZRTjFrUkMwd1NWendnTlRoVFV0Y0ZWS3dpVVZFbEtUc3pERFExSWxNQUVyRVZMWVExVUFzd0pTdERWdjhBTjBzalUxTWhCTElRT1JZeU9aVUJHRlVGT2w0eU9KMEFNVnNTSzJJU0Nic0REN1FpTllFaEp5UTFNbFVqVWswZ05UY1ROd3N4SUxBUVZWWnlNMnNqQzBBd0lROWlVdlVETUxzU0o3YzFOYlVUS1VObEFrTVROMjh3S2s4U01WZ0JPV1VBRDRVRk5wTVFGcmtUQlVrd0N3QXhJbFVnTE5FRkxZQWlVRk0xSWJnekcwY0NCdnNDTkMweUttd1NPN2NET1V0Q1V0SVZCTUl3VW5RekxYY2lDN3N6Sm1Bd0k3a3lONXNqQ0FReU81WVRMRlV6T3dRbE51SUZMMkl6SmpjU053c1NOMWt3TjE4U0xGa2pBUkFsQzJFeExTOXlFR1FETFNoRkp6MHdMS1V3Q0Zrakx6Y1NKQUVGVW13U1V3VURBMGt3Q0ZNRksyOHlMM2tpTGprQkowQVZDcGNUVlpoZ01PRWhKeXdTQzFBREt2STFNVWhDTjdzaEFTQkRVVklETEtBRk5BTVJGSWNqREpFRk9SWndVM0l6T1NKUVZ3TTFNVDR3REQ0eUowOENWQ1lDTFVoQ0QxTVZETXNEVlpRakEwUUZKc2dTRDJ3U0Q3c3hPeE15TnVJRkwzd2lGNEExT2JzaUp6WXpJbk1EVkZFRkFUOVNKeTRTR0tzVFZyc2hBeXNTT0VNek5TTmdVdnN4T004U09Da3dOTklRTHJFVkxTSkJOc3NoQ1RKZ01OSVZOYndpTnlFbEUwNFNFN1lDTGpBRkR2Z3lMUEFnTEpreU9Ja2dVMTB3SW5RREUzVXpMN2N6RHdJbEEzTXpGSlV6TGJFUktDa3dPUnBDQVVaREJrTXlHNHN5SjF3Q0w3STFNQVVCTkRjQk5RUkRBWXBnTnVjek40VWxDcDR5VlpZU0JMMEFVMUlSQnA0Q1VVUkNOMDBRSjdFUkQxWXpFTjhRQlN0U04zWWhEbmNqTXY4Z0FTZFROd2dCT21Nd0xuOGdBTE1pVUZzUkQzd3lFUmt5T00wd055TUZWUkJRSzNZaUFyY3pHeVVGT1B3aUNOY3pMbGNUSkVVVEZZMENHM0VsS3Vzako3UUZLTEFBR1dRVEJUdFNLN3NRRU5NQU4zWVNOVEVSVXNrQk5uWWpVUk5sS1lvUUo3TUJXMklnRlpwd0xXb1FLdk0xTGJVRE8zc2hNUkJ5Q3NBUUJrNFNHc3N4QU1Vd0N6RWxBMVFqSXJRQ0xTRnhVQVFWRU1RRERuTUZNU0pBSnlNaEVJTWdJRndBQXU4eVVESXhOMVlUVnJzQkFRMHdHNFVURktRZ0lqc1FCNFVnQ0NNeUkzUVFVb2NpTVdzU1V2d1NCcE13VVNJekFrQUZORHd3TUtzVENGa0RNeGNERDFNaEQ1VXpWM0lsS3A4aVVDRVREYkl3VXYwZ011a1FOMEFGTU5jREY3d3dMTWNUTzFvU0VLUVFKUXh3TUxBbE43SWxGUnhTTEpZQ05SUTFVd2dCTU1ZRE8zUXpPaWNTTzdzeE1Oc3pON3NRQlVoRkcxQWxEcE1ETVJrRE9Lc3pONGMxTzFNakNyc1FCeHNTVXFNekozOENGelFEQjdFaEp2MHdKS3N6RTRZU0JUNEFVQ01SQ1R4eVZVRlZOV01TTjdnd01UeGlJemt6QVZ0ak56RUZXVDlpTnZRQ05UVkJDRmt3T2JnVE1uRVZOekVoTkZrd0pTdHpVU2dCTVRnekpBSVRCMFVqVWtNRk1RMXdDc2tCTTBBelZWd0FOd3N6Q3Mwd0xwQVFFRlFUTlJ0eUNFSXpNS1l6Q1laREF4a2hKMllCV2tzeklOY2lMU2h6RDQ4Q1dpQUFHNFlTTlVBRk4yTVZXTXN6S1Jvd09qRWhKdUV6Sk5JQUROVXpPQWt3RDRFUkJNSXdFRm93T1JKd0M3b3dOTUF3R0ZZRExaVVFVdGtSRU1VUU1uQUZMVFF6SjFVVEZJd0NNSlF6TFZRRk4xa1FDcFF3Snp3UU5xY2lKdjRDVzB3eUZrWVRCU0poTjJRek1QUXpFWUpTQlFoelVESXhPU1ZRVTRjRE1VWkJEQ1VSRk1Rd0t6UVROVVV3TnNRRk1RZHpFemtTTnQwd0ozUUZJTFV3RXpBMUxvVUFOelVGTTFnVEdrb3dMVzRBVXRVU0JOTXdFanN4TW9jREQza1FCTUl3TTcwUUJiVVFLMmt3S200eUkzSWxLVUVCVXQ0UUMwVUFVd01GT1I5U093WUNVTU13VnZvUUJLTVNLQ0V4SzNJRFZ3VURCS01UT3ZnUUZLQVRWd00xQXJRbE4zRVREUzF5Q1VaU0JSTURVczh3SzJVUUd2a2pMWWdETjdnUldrTWpJellTQlhWQU4xSVZWTWd6TnpJVkI0TXpDd293TzB3U09yVURPVHR6RHZzek9tc2pGV00xQVExUUR6Y2hCMVFBS1FORk1tVUJEd00xSjFVQUNGb3dBUWh5SnlReUpMWWpVSndnQVp3U1Vxa3hKM1FBVXpRVE51Y1RONEVSQ1Q5U0YzSWxLa2N6SkNzQlVrY3pWUklWTGtjVE52NFFCME1BVnpNRk1Rc1NEdk1UQmJzVEpuVXlPUlJGSnVraEYyc0RHZ3NnTlM1d0owb3dOUUpEQ3ZjVEJYUWlDMjR5TktjVFU0a2pBSVVoTXVnU0NtUURHb0FGTVF0VEozSTFMMllqVTRjeUFVa0JKdmt5TjJNRFZPTTFMc1VBVXRJeUtTQmdVUlpqQW9zVE9Da0JOUjlDVVpObEFiTXpVQ2dSRktRRFU3Y3pPUHNpSnNBek5tVURKdlVqTlFoQ1V2TVJXa1F3RlJ4UUJXMEFEd2dRRDV3eUlVcFFCTThTSzFReE9LWWpNSllqTnhrd0dDY3hNMUlUVUdzd09TRlJVM1V4S0tVUUNGb3dPUWNUTzFJbEJLSXpEdlFUTmpraEp2WXlOcEl3VXp3QU9TdGlKQ1VGTTNzekp6VURMT2NqQzF3U0NuVWpVd1VpTHU4Q0Q0QUFWa1FnSzNZek12Y2pORUl6T3BZek5qY0NMVVV3TjNJbEE1UUFEbk0xT0xFeFVEa3lJcDhDT1pZRE9UZ1NPemt4TnBJUUVGSUZOWVV3R3prUldSVkRBRk1WQjQwUUp6SWxDS1lUR09ZaU0ya3hVdFV5STVValVnMHdPUWwxVXdjaEJSaGpLbnN3TVVVZ0MyZ0JWVE56VjNzeEx0Y0ROdXd3SmJzekxuVXpPMThTVXNneUtQSURVVllETk5rUUoxQVJEUU5UVjRvQUJqUUZENFFDV0l3Q0YzVVRCMHNTVXZ3d01OUWdKdlFEQVF0REpzZ0NVMlFRVUZvd01ua1FKeXN5S2tzelV2Y3lNVG9nVURBRktuc1RHMHN3TW9VaEl6SUJVMEFUVnIwQUFZUXpEMElTQ2s0Q0dPQVZMVFVnSnNFbENNUXpVR0FWTmlNak51VVNCM0FUVXpzQkFYVVZVN293Tk1nRFZTSVNOSzB3QzdFRlZUcFNWUlJ5QVhkeUcwRXpPYklUTVJ3QU9wVVFKQUFRQlRoRFV3STFMajh5TkVNVEU1QWpOenNCTVZVUUswVXhOTlVERG5ReU9VSmhKdkkxSkxjVFZ3UURMbHNpSjNvUUNLUWdMVVp5TktrQUQyOHdMbE1BRjNBMU5SdERVNE1oQ1BVd09Ga2lBWlF5Q3ZVMU9tNFNNdlVTQjRNeUN6Y0JNMDh5Q3ZrQ0FTOVNEMkExT1RweUp6UWpMUE1qTjRVeE5iOENOTmNqTXdzeUp1QTFOM3dTTVZnZ05va0JEMXd5TzJBREo3SUZMVEJsTkZJMUttUUFNVUYxTGJvd0R5a0JPYjB5VTRzZ05UWlFOeUFWQmx3eU9KY3lMdmt3Q3dBeE0xUWdGNFVqTEswd04yWXhLS1VBTkZRQ0xUQVRON2d3TUtRUVVDd2dOWXNUT3dZUkNiQURKSlVpTlFVd1U0UTFMbjRDTnZjaUExOGlVNGN6TkxVd0ZGb1FCcWdGQ3Y4UUQwTXdVSnNCQWs4eUMyMFFEbFF6VUNFVkJiNEFKRk1sQjBJekNOc2hNTWtoQ3NReE5Mc3pGMzh3TVJFeFVGWVJWS1l6R3N3d05VZHpKc0l6S1A4eVVyUURPUmRpQzNBVEVLTVFNTkUxTFA4aUp1TUZOcEF3T1Iwd0FzVWdKRWtTQ0xJZ0tuVXpNTjBnQ0FrQk5LVXdLdlF6TEpnbEp2TVZXMjR5S0ZRU05UTlNEdk1UR2tBQUNOQUZNdjhDSkZjeExrc0RHUjh3QXhjekN3OFFFNWN6RUt3UU5aSXdKQ0lWRk1nRExSa0NCTFFsTnpVQ1ZNd0NKVXhBTm44eUd3Z1RFUGNqRXprek5xTVNEQVVEVmtZRFVPa3lPMWtnVXRJekozNHlESm9BQnNVd0cwY3hNNVF6SW53QU9Xb2dVMWdCTTBnek1GUWlON2tCSjdrUkVrSWdVclVpTHQwd05DVVNDM3d5RVpSQ05UeENKRDBDV1l3aUU3OEFBb0VoVUZVek9Nd2lMWWhBTFFOeUdzSTFPYlFUT25RaU1va0FOQ2tCTlRoekVHUXlMTE1qTkVJeU0xVUROWVpDQVhReVV3SVZFcEFnTE5raUxUZEROMWN4SlJOalVrWVROWU1qVXo0eUsyVUROVUZWTFpJaE40c3hNUElBRGpzZ05Lc1NVM2tSVjBNakpZWkNOS2tRTkFVRlZrUXpVb1lDTFFSelVEUUNXWXNqVTBFbEtia1JVekFsQTNVREF6WUNOMnNTVTRBMUpsVURKclFTQnAwd0pzUXpLbHNUVndNRk9uY1RLM3N6T21Zek43WWlOVWhTRDJNeE0yY1RLdmtqTVNOeUcxd3dMUlZEVktZeU5wMHdVelV5SW53Q0dZRkZMUTB3QzRBeEprVURHb1lqQXUwUU83TWxDVGhEQ1loUkxXY2lVNEUxSVBNd05GMHdOVkZsSjBJeEtNQWpNcnNBTVhBVE8zOHdNUVZ3TEZVQ0xYb0FOc2dRQm1jekN6Y0NOVUJ6Q3l3QVZUSndEUmNEQlhWQk4xc1FDUEFnRHZVak1qZ0ZHQXN6S2xZekZRWmlMd1VoQ0VVVEJMUURPanNnQVJNakozZ3hNTUl3RWtZREFxOFNKQ3d3SzJzRFVyWXlOeHN6Q3dFVkdrUWpNN00xTVdrUlU3VVJETThDRHZjekFwUUZEMUVUQzBVakt6Y0ROTFVCRHlBMU1iQWpMbjhnTlNWMVVEVUZLUE1UVU5BVkxTQnpHcUl5S1RwQ0VOY2lNdThDTnZFRkwzNHlDRlVTQlhWaElGTWhBbTh5VVZGVkxSNWdDd2tCV3lBaklqc2hNVnNESkZzUUIwUXpHc3NSTnhVaEkwY1NHMk1RVkdrRExSbEFVdFVsQk5NUVVaSkRMVVVCRzRJRFdZTUFEellpTllnbElEa1JCTTh5Tk53d0FUbEZOMVFGSTNZREd2Y0RMVUJ5R3lVUkcyUXpWeklsQTdraENzc3pNTXNUVUtRQ0JRUkREc1VsQUx3Q05KMHdBSmdsQ3dZeU1SUmpDSlF5TFk0QUpDZ3hKcFV3SnJRakxqTXlKRWNWRk1NUUYzTUZBU1JUT0FNMUxMWVREUkFGTks4Q1VxRVRFUlZRT1Jrek9qY3pVRFlCVVJ4eUZPOEFOVGRqTjdZQkttOFNHa3NCTk5raE52VTFMYm9DT3pjREJ2VVFEQ1V5TzM0eUVvQUZNVXRqTkFZaEVtY2pVa29RTlZ4U0pGSXhOMmdETFJrQ05YOHlDdkVURlJ0VEZ6WXlMV1lnQ3ZjMUxsVVRHc0FsS3pjU0pBNFFETFVEVTNzZ0FaQWpKelFWQzJ3U0x6WVRONzB3RDBVRk5SdERNajBBQlNaQU5zVXhOU3REREZvQUFYQXlDN3N4T1MxQ05SRUZPT1VoQ3NrUkVTSndGa29BQkxzeUc3d3dOM3NEVXNjaU5VOUNKRXNTQjF3Q0dyWURBTVVRRHpZQklTQlFLUk1GTlY4U09ETXhNS0FBR09ZREFJZ0ZKc1VsQjBjekY0VURMWW9BSkNneEwyd1NORkFsQVhFUkQ3RWxENU16TXJvUU5Nc3lVN1FsQjFRd0taRVZMT3NqVUFJVENMVXpGWlp6QVBRVlV0OHlPM2NqRTNJRk1WaGlVM01CS0tVd05GY0NCMVFsTkY0eUpTQlFWSllDQnlrd1U0NHlLa1VBTW5JbEtuVUJKRHd5SlBnalV3Y3pPdGtBSkVjeUpNd3lMM1lpTDVBbEoxWUNWUkJ6TlVObEsxUUZKN2N6SXBVekM3SWxNSTBRT0Frd0ptUURLVmd4TFJ0VFVzc3pLMlFnSXpBbE1iUVRPeVVDV1JCekZOTVZOanN5VXFReU9sVVFETlV5T05NQ1VzVVNHME1RR0dJVkxtVWhJRlFWV3lzalVuc1JCN2NEVXE4eU1Od1NHd1FETlJjeUoxb3lObDhTRk5VaUFiZ3lHeWtCTzVZVEpWZ3hNTmtBTkRNQ1ZUQndWUmNpTFI5eVV2QVFDYmdqSlZnaEtLTXpHNDR3SWJJVEpGWVROWGRqVTA0UURsQVFON3N4QVk4eUpBWXlOM013RU5VekFyTXpDRGd5SmtNQUV2c0FMbE1DVXlZeklMTURBNzBRTnUwUUsxSXpKa3NUR1dZakFwVUJEemdURjI4U1VvTTFNVEFEREMwU0U1TVFNM3N4TlEwd0N2NHlNUFFnVWtjRE9Lc3pKdXd3TjA0Q01Ga0NONGt3R0FzQldNQVFWb29RQlR4U09BOHlJM1lUVU9BMU5yc2lDMkFGSXBJekZPa2lNbTBBVTM0eUpNQURGNzh3T1NOekpDWVRDUjFpTno4d09ic3pEekVWRklzVFVRWmlMWXNEVXdnVEVUMXlVdmt6QVhsQkozWURXS2NER0pVeUFRMXdENFFSRGJ3U1ZKY2pMUU1UTkE0U0NMUUFFcmNTQll3aVVzNFNDMTR5T0ZvUUJwY2pVQ1VsRE1BUUZyVUNMVFlRT0ZjRldJVUFOcnN4T2JjQ0Q3UVZEbkF3VUpVVE54TVNLRmNSV0lNZ0VSY2lOTDB3TnNvUUJLQWpFVXhnQVVBRko3RTFPazRDVkpZQ0FXNGdOMGNoQjFnREZua3lOWVF5VXlBUkQyc2pGb3NBTG5VUU9FSVREUFVBQXZNbEtKRXhON3NBV1QxQ012WWlMVDh5R3NNVkMxd3lMVmdBTlJFUktEUXlNbk1nVVFaakxZZ0ZOMEFRRDVBelVaTmxLVDVRSzdNbEJiQUFFdklWTFZOVEp5MHdJbHdDQ3pZVEJWUjFVN1l6TW1VeklKa2lOU2NpVXpNU0RsQVFGRjhBTmprUUpzMHdJUTlDRXZzd0FPY1RLMEl6TlR4U1Y0b0FMWDRnVXZnVERwY3pVTkFWTFpBRkRzY1ZDUU5BTHZNMUxWZHpHN2d4SzE4U1ZKUWpNcXNTSjFvd0xsUVRFUmNpTEFVd0oyTXhPUlZURVJrRE1vTXlDdk1URU53eUU0d0FBVGtRRDRZeUpsVUFVTmNEQUowd0dzNFFHMklERDNjek5iSUJDczR5TTFjRFZvTVZCVUpnVTNzUUJwSURWMDB3TFNkeUczOFNCU1JETHJRQ05WUkNEMm9RQzJNUU83WXlMUHNDTnVraERwTXpGS2tDQXpBRkQwUXhMTElEVW84QUxVSmdOd01EVm13aUZ6a2pOS1VRT3ZjaEFOUVFEajhBQlNOakNzY1ZEYmNUR1NneEw3OHlVRlVWRFBVakMzQUZPV1lBVTdJeUliQXpHR29RTllFUkRFb1FCa1lqRmo4d09VZGpOMFExTUxBREZGTUZBUWhqTkRNekoyZ3pLamNpTXNNekM3MFFGbWN6RzRvd09rc3lORVl5TkxRUUxKOFFOMWNUT3NVMUtwUVFGM3NSQm9NQ1UxZ1JFMzR5TmpraUxUcGdDc0lSQlFWQVVDOEFCUmhTTjQwd0lOTUFGcllETlFNQ1VEQUZNTnNqSVpvd094Y0NVc1UxTzA4eURVWkNMUVFWVUEwU0ZSZERVU1FpTFNSbEp1QTFNMlVqTnpZaUxqa2hDRWtTQk5VakU3VWpBa3NUS3VJek9TSkRVRll6T3FNekp5Y1ZFU1Z6VXp3QUJVOXlDQ0FURTVBalVSWkRMbmtCTkZNVEUzNENKamNUTnFVQkcwc0JOa1VnSkZVVEJVa3dVM2t4STU4eU5VcHdPNUFsSnpFMUpiTXpFcm9RQlZBVlU0TVRETFFBSkZZeU5ZWXdVc01SQ1N0VExGc3hPWHd5RHdVbEFud0NVV29RQng4aVV2RUZOTElnRDdrekE1RWhDeUF6T1RKd0lSa3lOVkpCQzdZaEJLY2pERndBTFZGRk43QVRHVE5nTFVaU05TWmhKN01UR0tRREtqY3lPeGtnTndnUURiTWdOSnN4Tktzek40UXhNNU1BTHJFRkxVdFNKRk1CV0tVelVDRVZMamNTTzJFeEswY0RMTnN3T1RaUU5Dc1RHMjh5RVNvZ015RVJEQ0VsRU1JUU9uQWxLc3N5QzF3d0pNTXdEM1FpTFlrZ1U3VURXWW9TSllKeUx6TVNLdUExSXBRZ0ZrY1RCVXR6VXRFMUlsVURVS2NEQUpjekNGQXpPcFFUTlFwZ05UNVFLM2dCS3BjVEZKOFFCVEJEVTE4d04zOHlEdm93QVdReUoxVWxES1VBR29jRExNVWhOd1ExTFRoREdyc3hMWDFBRENJUkNwSXpGanNBTnVNeUpzQWxCVDF5SkZFRk5RQlNKRWtRQ1JWak5KWXlPMnNUTzRjVkZZUXpDTmt6QTBjQ0oya1REYlVBRFlOMU5tOHlHRmNoRFNKVE0zVUROUUFGTnpzaEE1OHlFTmNUQlV0eVVzb1NETVVUQ044d003c2lDRFFSRktZVEtRTmxBdGNqQ0NVbEV5d1NLbk1WQlUxd0RGY3pMYlVRR0pNRkxWOVNVM2N4TlJWVE1OVXpBVFp3REM4UURMSWdMMzhnTVVSVEQ0NHlPNVVEVUNZaUFzc2lKdk16TTJRRFVVWnpPUk5qQ3NrUkRQd3lFRzB3TjRrZ1V2VUZMbll6RHpvQU9Wa3dDQ1l6TDFVd0dXRTFBbGNERHZjeE1tY0RBSllDTmpBRkpGY3lJbkFnSU5Vak5UUUZONFExTVBJRE5Gd0FPbDh5R3NBbEROc3pMM1F6QWtNVFUxNFNETlVETVIwd01YdGpVdEFGSTVVRE1WUWlMVGR5REZReEowY2pKN1VETVo0UU92QVJCTjhpRkpZaU1sQWxORWt5TExJekVua3lOVVJ6TnlrQktrWURBTlV5TVlBRkoxMEFVMHN6TUpzeExTUVZVQUVsRHBNUVVaUWlBVWt3R0FBekk1SUFEclFpTEkwd04xa1FETFF6S1Jrakx6OGlKdkVsRlRWektyTTFBbWNpTjFJekpMd2lNcmN6QVZSbEp5b3lNMFFqRkZZeUxaa2xNNE1TRllVQU9SWVNOemNDTjFFek0yWWpGVllpTlRJQVUwTTFKa3NEVW5zUkJQZ2xJN2dCTHBVelVVeEFNVWRTTnljMU01SXdJM2NETFM4U0p2c0JLU3RETlFSaUxqUTFVN2dSQm5JVFVOOGdNVjBRTjRRek1sc1RPN3NBTVR0ekNFZ3lPMkFUT25VeUFKY3lDeUF3SzJzelVZSnlPb3NpQzRNRFdpTWdMblVqTVdBalVzTXlNbVVRTTdrREFSRVJLek1CTDJ3Q1VZUlNOWGt4VXlNbEVNVVRGSkVWTlFzakpzQUZPMVVqRkZVek9NTWpVdjB3TE53eUdOa0NMMGdsSXM4QVYyTWpGT2tETVJKUU51Z0JOTU1qRm9JRk1ROXlVRFV4TUxnRFZVWnlPU2tRSjFFbEJLVWdVendBQjVzaUN2NHlOVHBpQ3JrREJNVUFOdUV4TE1RakR2c2dNTmNUTnVFeEkzWURWdlF6T1RkQ1V3RUZWMlVnSVZJQ0I0a3dOMkVsRlQ5eUVORVZOamNTSjFJVENROUNPM3d3TVhobEoxQUZPbjhTVlJvd0xWa0JEMlV4TGxVd00zUWpMc2N5VXZNeUoySVFGWWhnQVRWd0owNHlJNTRDR0dBMU5SWlJVMHd5SjVjVFVSUXlOT0VSREMweU9UMXlETnNSTE1zU05BRXpKTVlqRnNVQ0FRTVNPREVsRE1Bd0ZSUmpBVjVBRHpVU0Jtc1RVU1lpTlJCalVxSVNEMVFBS0ZjRE1LMFFKQ1F5SVFOZ05ySVZOVXRETkZVMU1QSURBbnN4TW5NekpEUXhNTGN6R05VaU1UTnpKM2tTQ1JSakNOSTFNalVCQ3MwUUIwZ2pNRmt5T1g5eUpzSVJGaUl3R0Zrek9tY3pVQTh5Tm1VaklGa3lNMGNUTzRzUkJNUWdVbjB3QTVnVlV6QVZDVEpEVnNjQ0x3MHdDRDB3TzBVUU5KUXpOd3N6RzdNVkJsc0RVMFV6TjRjekowTUZMUnB5T3pJbEtRTUNVMVFWRVNWZ0ZaUWpOcGtBSkZFMU5uWVRPdmtEQVFrZ0p5WVJCM0FRVXNrREIwZ0ZDN2dCTjJVVEZSWUROYjh5VUFzaERUcHlMSkVsTVZwd043VUZLbFlERWpjRE9QUUZKdklsRFN0RE16c1FCUkVCSjJJeU9tVVFWczhBTmJNalVGZ3hNU05BRzBVRExic3pEMnN3S2tVUUdab0FOVGxCREVBeE9TSndOUmt5TXBBMVVDa0JJU0JETUZZeU1vMFFORFl6TTBVekdvMGdOVE16RENnVEcyUUFHd0FGTFJzeVUzVWxDU0JnSXJNMUFwVWhOd01oRFRweUdZWnlBeHN5TnVNQk5ScENKVVpUTnBzRERBVURWMFFRRjNJVk5PZ0ZOM1lSQ21VVEc0b1FCUzl5VUYweU1iOGlKRlVTQm9rQUp5VTFJNVVnVXpzQkw3a2hORWNTQ240aVVHMGdNVEFEVUNneU1NSWpEUXB3QVBBMVVxRTFKS2d6VXNrU0JNTVNKdjBRQ2w4U0dKY2lBWVFqVXdBVEM1NENWamt6T1pjRE4zUVJETU1RVlZwQUJYZzFVNGd3SVBRREE3QUZMU2hWVXlzRFdZd2lVR1V5TFFzeUREWVNEazRpRHYwd01MRXhKMVVsQk1RVENSMEFOT3NqVUFneE9SZHpOalVDQnNjVE5DY3hPblVEVlFaQ05ZVXdOdlF4TjNzVE56UXpBN2t3Q0NnUkMzTURManNRTllrbE1Dc3lNM0FETW5zQk1Mc3lDMGNoQjVJQUV6MEFPcmNUVXZZek1SZGpJM1lDTnVVQVVEc1JWS1F6RlpZek9Za2dVQWdSRklJUUt2UXlOQWdsQ0VjQ1cwQVRDclV6TnBNeU5ETUJPcFVnTjcwQUFWcEFKeUVsRG1ZekxqQUZBWG9RTndneE0yc0RNblVpTUpzRFV2QXhLbElRVUZVREFYZ2pKQWNWQjFBQVUzSVZMeHN6SnZFVkNRTndVTlVpQVdrQkp1TWxCNXd5RUMwd01RZENOM2d3SlJwaUkzSWxBMFVBRDRzVEJiVWpObmtETnhrQUR2a3hJNTR5TFJrek4xc3pKdmt4TlBBREZuc3hBWE5ETndBekpUMVNVb1lUQlpzeUdEZ3hKU0pBRzBraUFTaHlEdm9RRW44aUpyVVRCWU1qVUZJMUtrOENGN2tEQndzak4yUUZJTElRVjBFRk5UMXdHeUkxSjJ3Q1VKSTFOVlpRVXE0eUtiVXpNcmtETFo4aUp6TTFOYklUVk9RakxRa3dENHNRRktzRENZTmxLWDR3VTBZUlUwVVRLM1VET1h0RE43Y1ZCUUJ6R3ZNMU4yZ0ZEQ0F6TzJzak1GVWlBTGNERHNFRk9NZ1RLVll6TFJaQkpDTWxBMVVRRHpzZ01VZFNVdnN6TlBnREQ3a0NCbU1UVXRrU0JsSUROcmtpTFRaUU9GQVJCYlVURzNraUwwa2hKN2t3SjVnelVzb3dBdVFGTjBZVEZ5SXpWVk1GT2JnU0RFZ3dLUFFUTFpRRExSSlFLME1SQzJRZ0p6d3dOWVVoQ0ZNeUtUcGlEdmtDTlJsRkQwWXpOMVF3T3ZjQ05JOFNLN2t4Sm5jREVyY0RMSU15R0NrUkJRcGlOM1F5Tlgxd0dxUXlNS0FBTE5jeU0wUWxOemtTQm1Bd0dVUnpPWDh5RDNNQkpSVndFQzhnTjVjREoxVXhOcHdDRU5rekxSTUROMVV6TjBVREczSVZMWWN5RHpNRk1RdHpOUmNEQk1rd0czQXpPTFV3Q1pZakFWdGlDeUVsQWJvU08za2pNV2tnSjBjU0NQTUFGbmtEQktrd0p2a0JNa1VETllaaU5Mc2pKdU1TRGJzakt2d3dBU1poQ3dRVERTTkRGelVUQlRZaE5zNHlObVV6VnpzeE9iZ1NORlFUQk5JQUNGVXpOUmxGQ0NFUkRMOFNPUm93T1pzalVDa3dMcHNUQ044QUF1VUJHcTRRRWtVVEM3SUZBYkFqTjRVVldJTVRFSnN3TU44eUQ0WVJEVGhETXZ3QU5RVWdOd2d3SzJjaktKc0FBdU15R3NvUUMwSXdVb3NRTnhRRkpzOFNCTlVEQTNZQ0JWc2pKc0lDV21NREdyWXlNVXR5RDBzeE5ib1NWazBBQlRKaE55VXlLNUlER3JvZ0FVSkJHRFV6SUxjekVvUWlMMlVoSXU4d00zTVRLamNpQXc4eUNDTTFNYkFURjdRaU5JOHlDN2N5TTBNalUwc0JBc2toQ0FFekxRVnpHblFqTnRVQkNBY0JNVE53RDdraU1VY3pVN2N6STFBREZKVUNMVnBRVTFZUldNc2pFUmtET3lVeFUzc1JHMlVqTXpzQUxTOFNLdWNTQ3BjREtOUURCN2tnQ3pjQkxRdERMN3dnTVdrd04zZ0RVS3dpRlpaRE1RZFRPemMxTDVZekdqY3pPeUVSS3NJMU41d3lWTmt6QVh0ak4wWXlLbElqTVZFMUxsOFNLM0VEVWtVZ0R6WXlNMVFGTjQ0UUIxc3pPRlFEQkFNeU5BRURWMkF3R3ZVaUxqY1RKdk1WR21VVEp2VUNMUUpoTXdJMUtsc3pEanN3THRzeU5Ba3lLTVFEQ1I4QU95RUJEQ0FWRmtJRExySTFOUlpBREZRMU9NTXdNdndRQlpzQ1VDc1JCNTR5TTdNMU5SaERENGdTQmtNVFVaTUZBU2N5RDdJRktSTlFMUklWQlFFUkt1VXpOMlVqREpreU1TeGlDN01GTE5BUU92WXlMTnN6Q0Rzd05OQXpWaklWTFROU09FYzFKNWNURVJrakFSZ2xOdWNoRUs4Q00zc2dNSU16QzdFVENwVURVUlF5TldrUVU3c1FFM0lESk53QUJUc1NOMlVWRVF4Q09GY1ROVEJTRENBQlVtVXdVM3NSQlJ0eUNzZ0JKYlVEVUNzUU5RQmxKMVF4TFExeURWZ0JBTDh5R3RvUUYyUXdVcmNETVE1UUt1UXpOazR5VjNzd0xVTXpVdFVSQzFBekZ3WURBSlVoSURzd0xROUNLRndRQlZWUURFRXhLTFVBTU44d09RSndDdmdBVW04U1VHRUZPWUFUVXNFVldJZ2pFell6QTdrZ1V2SXhOTjhpS244UUJZTVRPN1VGTmxNRE92MFFCd2toQ3M0eUwyQVFVbjh3TnVVQUpBOFNGbVV3TEpjeUxaSUFEQ1VsRFRKUVVKb3dObWNqQ0ZZek41c3pDRlVDTFlJQkdESXhKUXhTS1ZZQ0JWTVRVMEkxTVIxQ0xOMEFCemtBVXFNeUxiSWdJM1lpTTA4U09BTXpPMUFETXZzQk9pc2pKRE1oRFRCVE9SOGdBSzBRT0FjaEEwTXdVUkFGTmJZd0M3c3pKUXR6TUpVeUxwa3dOc1FGTUtValVXWWpNVlp3VURJeUliSUFFemN5QTNrd0d6TTFOUHd5RFl4d0wza0FKRHN5TWx3eVV2MGdNUThpTkQwd0xsVVFGTm9RQlhFRkp1TVZHVFZETVFGMU40TVNPczRRR2tBQUM3c0JBcmtRTnZreEtQUWpOTnN3T2JReURzY0JLbE16R0NBMU03Y2pVMTRTQk1zekZ6UURNWDRnTndNMUkzVUFKVXBnQWlNekp2UVNCS1VEVTdZU051VVFVelVWQ0tVd1ZqVWlNUlJqQ3M4UUNLUUFWNzh3T1VSeUd3SVRGeVFqTG5NMUx1OGlOd2NCTVBRQUV2VURBd0VSRHN3d001NENEcmt5TlN0alVBUUZNUWh6S3JzQUxYOFNKc29TRE1JZ1VnY3lBUnR5R0ZvU0RsSVFLM1VpQXpnRkMzRXhJMXdDQTdzZ0FVa1FVeW93TDBRVEdDRWxBNXN6QzI0d0xtQXdHQ0ExTHJVUUpEVVJFUFVEQ3ZjekFWaGpKQ1FTRGxzRERZaGdNUmdsSUQ0eUtSQlFHd2NqQXU4eVUxY0JOcFFRQ2o4Z0FWRnhVM01oQTBJQU1WSXlPUTFnVXRFMUptSVRWWkVWTHlzeU4wQXdMTVl6RnpzUkJ2a3dORElSQ1FOQU12VVNCTjBRRDNzUUMwc1RHd293T1hnaUpDZ0JOS0FqS0ZzaE1xc3pVM2t6TVBjVEtOTUZPV2N5Q0Q4QVd5QVFFNzB3TlZoVFU0Z0JNa3d5VmpjQ0I1c1NVdE15TFNWZ016OHdNVFFpQzRJRk5OTVFDVVp5QWpNakp2b1NEMThDRHJRVE50VXdHcUlSRDFjakVOWWpBN2dsTXVBeE8zSWdVbnd3TFpneUoxc3lJTnNERlJjaUxzc0REd3NoRG1VUU1OY3lBVG9RREVRUkRSTlFVSjhBQTdjaVU0WVRDYnd5T0ZBMU1WMHdDc2N5TGJvQ0xSY3pPVDFBSjFneE9wSVRLajBnTWJBeU5EUXhJUzFDTXpvd04wUWxOdkF3TGxValVqa2lOMjBBSkNNeU0yTXpHblF5TVFWbEp5QXhOTklRRVlKREFZQVRPN0VGSVNCd0ZSb1FCUlpnTnNJbEMxUXpNdlFDTnpBRk4zQXdJMThDTUZVekFOY2pDRGMxT1JWQUVua0NMMFVCQ3d3UUJTSkRDVVpDQXlRbEp5SUZKbHNER2tvd01PUUZEeVVSQ0tVakZGc2dBWThTS3Vrd05RVnpPSlV6TklzelVzc0JXa0FBTXpNbEFSaGpOdVFGSk53U01qY3lBTmt3SnlBMUptOHlNM2NqTE5VUlV6Z3dNTDhpVXNvd0FJa3dDM293S01NekdvTTFOeWNTSzBBVENRQndJbll5TFU4eUNFVXhMcFF6TlJNMUFiQUZOMFVGSjVBekROQTFNVGdpTnZnek1TeFNOdlVTQlpVUUR2UXpOUElUTHpNRkxBa3dVQUlGTWJveUdSY3lMbHNqSkZZVERLZ0REUkVGT1pzek43Z1FDM1VqRTdZU0JWSkJDRll6T05zek16d0FNanN5VXdFUkNwTXpDUVpqTnU4U052UUZNTlV3STdJMUxLc1NLQ2dTQjN3eUdKY3lNYllRVXRJUkVwVVFWc1l5TU04U0p5Y0JOTThTRllod09vOENKc00xTTFZVFV6c1JMck1DVUFrQklTQnpKWkVWTlVraEpETUNVMjR5RHpReUxVaFRPc1V5SjVjVFZRUkRBTnNUSjJZU0Mzd3lFMHdRQk1VaE00UXhMbk1nQ0Z3QUJVMHdHMUlWVk1Vak1qSUZMUmh6R3N3eUtTVlRLdk0xQTFzeUdDMFFGaVVRVUZjaU5tRVJPMlF4S200Q0pVeHdMejBRVXpJeU1ScENGN1V5TFdnekNDTVRFTXd5SUpjaU1wTVRVM2dRR1J4aU5OVXpMUWh5RHlVektRSlFHWWh3T1Jwd0RETWxCUlZES0Y4QUFYVXdHc2NCTm5ZVFZTSUNCVzRnVXE4eUwyY1RGUVpUQndNVEQxa1NGSVlEVnZzUk40Y3pEd1V4S1I5Q01uUXlNUVV3VXlBbEUwWVRMUVpETVVNU053a1NEbFVEVUs4Z0FiNEFVQWtTQzFJREwzSVZMU1J6TnZ3d09wWWpOUVp5QW84Q1U3UTFOUElURnIwQU1BY0RENE1SRnlNVFZLVXlMbDhpQ3ZZQldZUXpWN0VWTG9BMVVxQTFMbmN6RzRRaU5uZ2xKdU1CV0lnREZWZ1FCU3BBVXNJMU41QVFFSnNSTHcwd0dxTUZJUUJBTW5JbEFMc2pKdmNoQktNakxKb0FCb3NDVTR3d08zSUFOSmtTTnYwd0d0TWhCMjRTRXJjek8xVWhJNzRRQjFRakV6WVROUmxGQ0RBbEJQZ3pGMFlTQlc0QU51a3pPS1VnVWdVakxVaFNKRU1SV1RWelVHUUNOTmNqVUZjVkQzUWpVVkVsQXJVQUpEa3pNTEF6R2tJbEtXa2dDRUF4T1NWd05SSVZMVmxoQ3lVeU5sY2pMbllDTHJVd04xTUNWTU1RRUpBbE1YWWdKRjBTQmtNVE1yb3dPajhTT3NjQktuUUFHVkUxTXhVaE0zQWxEUzl5VnJNRk9WTlRLeklWRU1JUU5yc0FPa2t3SjJjVkQ1c0RLSjhRQk1jQ0pFZ2hCMkl3TzNRakxSVndHd01SQm40aUtyVWpBQTB3QzFFVlZrNGlVcllqTFNRMVVzZ3lOcElRTU5FMU4xVUJON2tSREtVQUtOc0JMcFVoTXlvU0NTQlFGNzhRTlJjQ1V5TUJNazhpRXp3d0Exc1NLMmtCTk5VRENGSVZMWkVCSjNjQk5Nd2lDVVJpTVhneUN6RTFKUElERG5VREJSZEREeVUxS1BBVEdDOEFNYmtnTjRRRk81VWdVa3d3TDMwd0Mxa3hJcDhpRFloQk1TUkRKMEUxS3B3eUdna2lMTEVoVTFReE5NQUFHTkkxTVhkek5BSVNCblFnVVlOMUxWeENVdEVUQ1QxQ1Zuc1JMcmNTSjBBUkNLOHlVT01sQUw4eUd5NHlLMWdESzc4d0FOVXdVeWN4TzM4aUNqY3lMVzRnSjBFMUxuUURPN1VpTEswQVU3c3hPMU13VXJBMU9SY0REMThDV1JwQ0x2VUNCUVVBSnpJek9ScENFSlF6TlNwZ04yc1JEbVF6VTN3d093OHlDMU15TzFjREw3MEFPWmNDSjA0eUlib2lEN3dBQVhVbE4wc1FDbjhDRXZVREFia2xKeUFWRHBVVENKMFFOSVVoSTFFRkpwY3pHd1VpTVRVaEkza3pOUVJ6SnpjRE5ZOGlVc1VsQjFzakNqa2lNVjVRS3NBeEkxOGlFbnNSTDJjaVVxQVFGSVVRTEpZQ0xNc3pDREV6TnBRREFVRlZCazBnTkFJek8yWURPUjBBTk9VUUozTUZJU0pUVm9ZQ0JYVUJDM1FSQ2tRakxqVWlOSjB3SnNnUkRic3pLRllDTjRVUVV5VWxCTVFBT2o4d01pMHdHQU1WRG53U05GY0RMd0V4TjJNQktrTXdJdk1sTVZSaU40a0JVVFZ6T1VSU05KTVROc1F5TlJ4eUxZRjFObnN6VTdzQVdNUWdDRkFWTGkwQVVEZ3pKbFFnVXNZQ0J2Y1RKem9RQm13aU43VWlBWWdDTnVrQ1UwZ1RVNEVWTGo4U083c1RCazhTSjdrQ0xiQXpEdmNoQW1RakZRcHdMeTBRSkVzQkkzQXpFa29nTlZkekRFVUZOMUFERW5ZeU5SVmdORGtRQ25BZ1VPOEFPMTBBREZZek1tNFNLamN5T1Foak52RXhMa01ETEo4QUJXQVRVM3NSRW1JelUwc0FPUmhGTjFreU1LQURHTjhnTlRCVEoyZ0FVS1FnSkY4Z00wRVJEN0VWRUtVd0Z6WXlBNE1TTjFJeE5QVXdWRllUTjBjak52Z3pMMFlER3JJRkFUaFRLQ0V4THBRUVZrOHdPVUJqSnVVUkRMWURHTjBBTFZSVERzSXhOS3dTRnpFMU8wMFFKM1FUQ1BBd0R2c0FMTEFWVXlrUUM1QVFGWUYxT0tVUlVGc0FXWThTRTM4QUJxc3pHMzB3S3BjekVrd3dMUmNUT3ljaEZNVVRETmtETVUxQUo3UXlPa1FnRFJreUxRVlFOQ1FsQWtVREdLOEFMYmtnVXdReklQUVFVQ0FGTjRFaEoyRTFMbXNUVnpJVkx1Z2xDeWNTRVBZRFV3a0RBWVV3R0Fnd0xsSXdKcllEQkljekNETWxFeVFnRjR3Z05xa0FOQ3NUQzV3Q0dKTTFMTThDVXF3U0JsUXpDTjh3T2JNekNERVZEcFF6QzdrQ0JYRVZVdEl4TDBzVEtZcGdBVFFsSjNreUwxOHlMNzhBT1NCekozSVZCTElnTXJZakxNc2pVeVFGSzNNUUd3a0RMUWN6R0ZzU0NUVkRNTmt5TlZkelUxTUZObVFnQ1ZNVkxUVUJEQ2tSRDFVZ0wzWXlNVWtRTkVraEFRTndPblF5TVpJaEM3MHlPUkJ3R3dVQ0JZY1RVdEVGTExNd01ZSlNCbmN6Q0NNaEFsTUFOM1l6QWxzU0swTURXa1VnRkdjekFXUWxDM2t6SktzVE9KY3lBSTh5R0FneU1TcENVd2t5QXFFaFVGZ1JCbUlBQ0owd05WNXdEN3N6TjB3eUV6QTFMVGx3TjIwQ1Uwd3lVdlV6T1pNVFUzQXhOS1F6Q0pZekxUaEREMEFGS3BZek1Oc3hMUUJ5QzBFRk5MQWdMN2tETVVKQkp2VVRHS01US3I4d0xsTVRVM2d4TTVNak1Ka2pOVnR5TnpNeEluTWdGTlF6T3dzU0p6TVZGbUF3VXdBMUFwY2pKM01WRlRWQUxZWnlBd0FsTjdZQlVrc2pJcmtETlVrUUQ0VXhObVFBT3pVREJtVXdERklSQ1IxQ1Vqa3lPcHNDRERFbERuY2pGT0lWTHJNVE93Y1JVUk53RVV4d08wRUJORUVSRlI5aU5RWnlBWTB3VXRFMU0yd2lFRkExT1hZZ056UUJXVDFTQ05NRk9MY3pHM295TFF4aVVHRUZMVU5pVTRrVEVUMWlNelVETzE4U1VxVVREMzRDVUdZeU1pTXlOdTRRRktNVE1WSUNBTFVBVXRNVEMzQXpKWUpqTVNjeUQwa2hDS1FnRnNzUUJiOHlKdWt3SWJJZ0Qzd2dBWGd6VURNVEU1QWdJM1lqTHRVUlVxSXlKMTRTS1VwZ0FiUXpVc1ExSUxBREpOUXpBWklnSkNnaEIyd3lEN2tDTHVRbEN2TXpMYnd5R1JreUxYY3lDdmd6TEtzekN2c3dMdzBRSzBjVEZNUXpVVVp5TE5rQUQ3UUZNVDFTSlVaU051Y0NKREFGTVI5eUo3TWxLdmNpTnVNRk4wNHlHT3dnQWlVd0NFc2hFa0lRVllSQ05sOHlVdFExSVBRQU9RWlRCanN5TnZFVEU1SWdJdllpQVJnbE56a3hPS1FEQ2pBVkxpRVJVREExTVBVUUNVeFFOVWhUSzBBMUoyQURWZ1V6QVNzaU4wUUZNMzR5TlloeE9va0JORTh5Tm1JQVZOWXlMV1loSjdrUlUwSURGUmN5QUpjaUowVVNCMFF6T0pVQ0FVOUNKRmt6TnBRd0taWWlOTzhTSkZZek9TQkRERlFpTWJzQ1Uwd3dONVFUVnM4d09QY0NVcVFWV1RSVEp6WUNCUk55TkZVRk1wd2lVblFET1RvZ1V2UVNENThDQXo4d0FKOENVMEExSU5zekVOVXlMM2t3TkF3d01tWXpFMFVDTk1jekMxRXhOUE1RR3NNMU1TUjFVQXd5TDBVUUozd0FCVkFGRDdnQVVLZ0RHR3NSTHpjVFV5b3lNUkJBRHZ3QU00RUJENGd6TFMxQ0dPUURNWFFqQ0Fvd09wTVFDM1V5TEtzeUpBc0JLYjB5TE5jU0I0ZzFVNG9BVVIxaVVScFFOcmtRVXRVRkkzNFNNWUppTVRJZ1U0VVZXUlZqTTdzUkxYUkZKdUFEVzBNQUYzVVRCVEloTjFJek4yZ0RLamtEQllZQkQxRVJEMGdUVnpVU0JuVXdEQ1lSRGxzRE4zY2lBUUJ5R3pNQlVLY0RWdlV6T1Zjakp2QTFOYk1BR1pNRkxRa2dORWNWQlBnRE1WZ3hPVVJ5R0NVeUxQQWpVR0VWTG5NaVV0WUJKYjhDS0ZzeExBVUJOQ1F4T1J4Q0dqMHdBWUlBSnNJMU1OOHlGR3NBTVlBQ1UzZ1NEUTFpTkpVaUxVQUZOdU15SjJRVFZKOHdPQVVRSjdReUlsUWpOM2tDTGtzU05BZ0FWS013VTB3UUJOQUZERllSRTVzREUzWXlMVE55R3pVeE9SSkFWSkUxT1RJaEl2Y2hCbU16R29vd01PZ0ZHd0lsRG5BQUZKc1FCWUlRTzB3UUI1SXdNejh3T1NCVEt6TXpPU1ZBVTQwQUJwY2lORk15SWJVd0xKa1ROc2NURDBNRkpOVURGcm9RQlYxUUR2Z3hKUVZ6S1ZJaU1TUVZVd1FUQ2JzelV6c0JNb3N5R3pFVkNwd0NKVU5sQUEwUU5BZ3lMTEFRRlpRakxBc2lKemd4TlNOQVVKOHdPa1VnSjdRU0RNUVRVN1FTTjc4eUcwQVFDMFlES3ZVQ0FTUlNVcUlWQ2JJVFVrMGdBTXNTS3prVERROWlVd3NCTFdRakMzVXpLYk1RSlloeE5VaHlEQ2d4T3Bjek5GQWxLcXN6RzNjeU1UVkFLTmNpTFVoVlVGSUNXMEFUT0ZzQU9qVWdVdmtDVVJ0VFZLa2lNbmNUTjNJeExwTUFVdk1sS1hnaUoyOHdJUUJqTXZ3d0F0RUJKMFUxT3BJekZWWWlBVUZ4RHpJUkNsVWdGVlppTFRzek5EY1RFU1J6R3ZjQ040RUJEREF6TlBRQU9Wd3dPU1JUS0Uwd09UZERVWUp6TUE4aU4zQXpOUGNUTTNZak1UOHlDRmtDVlQxQ05uWUNMUnRTS0VreEtwUXpVWlppTVRsd04yZ0NVMGdUVUZvZ05RWndVdk1GTUxJd0NKc0FMbWtnTjd3d0pSVlFOWWh4T1FNeUoxQWxCbVV3Q3pVREJMTXlDd1FSQlBnek9KVXlBTFVBSnVvd0tRQkRLN3NSTlVjeUdxUUZXeVV3Vm5VaU5WSkFEMEl6S2JJREdvTTFMUU5DVXZnQktQSXpWTlF5QVJNU0RBMHlJbklRVlpKRE83Y1RVdFlTRms4eUdLTVZOak1DVTNNeE1TTlRHV01WTk1zekc0Y1ZCMk1BVnYwQUxUWWhOMUkxS1QxQ016SUZBVWt4VURnUkIxQWdOejB3THRzREp5VWxDVGR6Sm5VakEwVUFOeXN3SjN3U1ZKY3pNalV3RHpNVkVRMXlDN2tDQjdzRFV5Z3hPblVBTFpRREJvOFNLMTB5TGt3aVVqSVZMSWNTS0RNMU1UVndGdnN4T3VrUU9DTVNGSWd6TDdBbEtTc2pON0lWRG5ZekVTZ2dOVEF5TkZZeU8yTURLTlVTQnRNU0p1SVNDNU13TGpjak1qVUFKRVlSV2k4eVUzVUNMaVVRS0ZJVlZNTVFNTll5TVh0Q0Qxa3lNbFVUVW5vd01VMUFOdVFUQ2s4aVVHc2dBVGNUS0E4d081UWpOelV6QU1Nek55c0NWMllER3NBVkx4OHlHc01CT1Bnek5KQUZMdWN5Q0NJbEFSSndGbzh3QU0wd05FQXpONWdqTXJJMU1BY1NKRElDV0lNd1VOWVNCSU1qSkNVek4yd2lLdmtpQVhBeUM3SXpMTlFES3JZaU5rY3pDd0kxTHBRd0N6Y3pMVTV3RHdZU0JTTnpMUmtpQVhZQk4xVURWbTh5VUpJMU9WSlFLdmtCT004eVVvd0FBcVVCQzNNMU9tTXpDemNTTjJVQkcxWVNFNThTVjdZek8zTWpDRlVsRDI4aVV6VWlNUlZoTjdNeE41QURLcmtqTWpRbE5zZ3lKMlVUR25BVkxTa1FVRDhTRFQxeUdWTjFMUlZRRENRU0YwWUROamNTQlJaZ0NFUVNGaXN6SVlKQ0FzMHdHN2dSRjJNUUYzY1NCWGt3TkRJVkJScHlMWUpTQllBekQxUWxBTUF3R2dVeUF5c2lKdk15TFM5aUZuUXlMMmNDRHdzVERuWXpKWlFDTnVrUlV2VUJXUjl5RzRZaU5UMVFPRnNCV21VVFVWUWlMYjh5QzRFVERLUVFVVlpDQlAwUUR2WUJNUTFpRlloQUFrOHlHemNCT204Q09WWWlBelV3VTNFeEluVWdVMGNTTlJGQlV6VXpPcFF6VWs4QUxVTXpDRmN5TktVUVZrd3dMUlZoSTFVbEFsUXpPSkFsQTNRbE4zNHdJcFlqVUY4QUxXRUZKemNCSWxJd012SVZMT2toTjd3d0pOVVRVR2tDQmtnRkc3TXpPTGdqTG5jQ0FZb0FEQWN5SVBNd0tyVXpNd2tBRERFVEVtVVRWM0VsS1ZwUU9EQUJVUk5UVlpKek5MUVZVM0l6TWs0eUlaTVZMeHN6R3ZVRk9tY0RGdnNRQktNek5GVTFKTU1RT1pNVkxac3lDN0lWRks4U09Kc0FPVXh5RzQ0d001Y3pNVlF6TFBzQ0pDd3dJUVJUVVloQU9iSWhNMWtCTFN4U1Zuc1JMYk15SkZZVEIxc0REejhnTnZjeUd0c0JVMFFBRllod0xKa2hOMU14TTNVekcwa2lOWHRDVTdNQkwyVXpMN2tUQjRjeUN3c1RGMnNUSkZBRkFiRXhOQ2d4TzJBUUNuVWlBWFlnQ0VnU0Z5Z2pEbm9BTmJnRk43QTFNS2d6Q3Zjek92RUJEM2NSVU1BREsza3pBVmhUTkVNQktUOXlOVVJEQXFNVE4za0JKU056VlJFMU1LTVRVN3NTRmlVd1Z6VXlOYmdpVXRJeEtRSlFKUXBBTlNoeko3Z1FCNWN6RzdNMU9vY3pVeWNWQ0xzekdHd2dOVTlTSkRzUkNMTXdVZ3NnQVJrUVVERXhNblV3VXNRU05rOHlHMTh5SzVRREdVUkRBWmdTTnlRMUxtWVRVb3NSTm5zU0pBTUZMU0pnSzdreUFWVmhKRE1SVWtZREpqc3dBa3N6QzFrUkU1TURWN2tqTmJJaE5DNFNFU2hER3NjaUxRa2hDeUFURzBJVFUwc3hMSmdGSjdRUkQwNGlGSlV5QXUwd05Gc2hBYm9DQ05RQ0xyZ2xKN1l5TTI0Q0NGY2pNUmtoSnZBek1TQnpHdzh3Tll3Q1U0SUZXVFJ6VVZwQU9vOFNENFlTQjFRd0Zqa0NMTXNTTnZBUUNiZ0RVNGNpQWljVEpEc3hMTnd5TG5ZekxrVWhNQ3d5Tmw0Q0N2OHdObFVoTTFVRklsOFNVdnNBTktNVEpEWXpMbFF3VU5jaUFuZ0ZKQ2NoQTI0U0V2Y2lOVFZ3R3lrUkJNZ2pOSmNTQkljVEQ0QTFNYjBDR3pZQ0JYUmxKMGdRRjBRUUdyc0JBTkVoSkZ3d0prUWpDM29BT1ZVUUQwZ3pPMUFUTUY4UU5UWkJKRDhRQjBJalVSY1RCaXNEREU4eUxNc2pEUmNpTlJsZ1VxOEFXTVFnSkpVREFOc2pDN0FUQlBZRE9GSWxBVmhUS0FBMU0wWURWbnN3T1ZFeE52TWhDS3d5RVNZRExxRVJEQWdCTW1jRERqY3lMSjhTTnZrQk1LUVFVUVJUTnpNREo3TXhMTFVBVTdVREFua2dKN1lTQ1JWVE1Sa0RCWGRTRERveUpuVVFWWUZsS1RwQU52VUZLazRpVUpZU05LMFFLQ0F6TVB3Q016c0JBWWd5TjJBMU8xUUFWM01WTFJFeEQyNHlOTkFERVFSak1wa2dVMVFWVUtnREx6QTFPNFVBRDJNRk5UdERBUVpqTVRSVEtGTTFNMlFERHJZek5TQVZVejBRRW1JZ0l6a2lBUTFBTjFjVkJTMXlOcmN5TG9jelV5a1NHVGhqTG5zUU5YSWdDRVVWQmtVUU1qOEFPNEV4SjNJRFZNSUFON0ExTkljeVU0Y0JJcHN6VnJzaEtVZ0ZDdjBRRllJekR6TUZBWEFTREFVQldtc3pFWUpqQVpBVE83OEFXSXd5RDNvQUFXUUNKQ01sQjVNelZSa0RNa01qVTFnQklOZ1RHUVJ5TlhFeE53Y0JMS3N6SnZZREx5VUJHc0F6SjFZekc0UURMcGt4VXZzVEVUTmdGR2tDTFJOeko3a0JNbU13TzdBbEFtOFNPNHd3TzJzekZSa3lNbVFsSnlrd00xWVRFbk1GT3pVQkcwZ3hOcFF3R1ZaakxTUkRVc3d5TGJNQVYwc0FMTThDVXNVVEZpOHlHUlJ5TlRzVE9ETTFNMXNEVTBNbEt1VXdDMGtCTVRKVFZPOGdOSVVnQzRnU0VNc0RHV1FqTG1NVE5Ed1FEUzFpS1Jvd05TWlFEMUFUQk5Rd1VHVWlOWkF6RHlrVEVuTXdFR1lpTEpnbE51Z1NGMFl6RWtvd09yc1RVcUlWRU5Bd0tSRVZOVHNDVTBRUkcwY1RGdlF5T21rUlV3Y1NFUlZ3SjdZaU5UWUFKM1FWRVNKZ0xyb0FPcGNUT0ZjaENQc0RWM29nTlVCeU5FZ1NFUE1RVXNzaEE0VXdEd2t3TDE0eUZnMGdNbXN6RDNVbEVpQXdHM3NCTFdZZ1VGRWxBUFFqVUpNRkxTZGpDN3N6TTM0aUNuTVZMN0FGSkZnd0xic0RWMzh3T0E4U0s3RXpKTU1RQzNJMUxZZ0NOMXNRQm1zVEZ6c2dNd2NpTkRFek1RcFNVVlp6QTdzekNFc2hEVDFDRk53Z05RVUJEMU1GS1RoRENSa3pNeFVBRDJBRk9tY3pGU2dBT3dVaEo3UXlMYjBTVk9JVkxYd0NOdk1WQnBRelVLUVRN'
-key = 97
+# ========== TERMUX FIX ==========
+# Disable SSL verification for Termux
+try:
+    ssl._create_default_https_context = ssl._create_unverified_context
+except:
+    pass
 
 try:
-    # Reverse order of encryption
-    # Layer 8: Base64 decode
-    layer7 = b64d(data)
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+except:
+    pass
+
+# Color codes for terminal
+class Colors:
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    END = '\033[0m'
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
+
+class FreeLTCFaucet:
+    def __init__(self):
+        self.base_url = "https://freeltc.fun"
+        self.email = None
+        self.password = None
+        self.session = None
+        self.csrf_token = None
+        self.is_logged_in = False
+        self.claim_count = 0
+        self.max_claims = 1000
+        self.failed_attempts = 0
+        self.max_failed_attempts = 3
+        self.config_file = "config.json"
+        self.min_delay = 10
+        self.max_delay = 15
+        self.claim_failed = False
+        self.manual_claim_required = False
+        
+    def load_config(self):
+        """Load configuration from config.json"""
+        if os.path.exists(self.config_file):
+            try:
+                with open(self.config_file, 'r') as f:
+                    config = json.load(f)
+                    if 'email' in config and 'password' in config:
+                        self.email = config['email']
+                        self.password = config['password']
+                        print(f"{Colors.GREEN}📁 Loaded account: {self.email}{Colors.END}")
+                        return True
+            except Exception as e:
+                print(f"{Colors.RED}Failed to load config: {e}{Colors.END}")
+        return False
     
-    # Layer 7: Reverse
-    layer6 = rev(layer7)
+    def save_config(self, email, password):
+        """Save configuration to config.json"""
+        try:
+            config = {
+                'email': email,
+                'password': password,
+                'updated_at': datetime.now().isoformat()
+            }
+            with open(self.config_file, 'w') as f:
+                json.dump(config, f, indent=4)
+            print(f"{Colors.GREEN}💾 Config saved successfully{Colors.END}")
+            return True
+        except Exception as e:
+            print(f"{Colors.RED}Failed to save config: {e}{Colors.END}")
+            return False
     
-    # Layer 6: XOR decrypt
-    layer5 = xor_dec(layer6, key)
+    def get_credentials(self):
+        """Get credentials from config or user input"""
+        if self.load_config():
+            return True
+        
+        print(f"\n{Colors.BOLD}{Colors.CYAN}{'='*50}{Colors.END}")
+        print(f"{Colors.BOLD}{Colors.YELLOW}🔑 No saved account found. Please enter your credentials:{Colors.END}")
+        print(f"{Colors.BOLD}{Colors.CYAN}{'='*50}{Colors.END}")
+        
+        email = input(f"{Colors.BLUE}📧 Email: {Colors.END}").strip()
+        password = getpass.getpass(f"{Colors.BLUE}🔒 Password: {Colors.END}").strip()
+        
+        if not email or not password:
+            print(f"{Colors.RED}❌ Email and password are required!{Colors.END}")
+            return False
+        
+        self.email = email
+        self.password = password
+        self.save_config(email, password)
+        return True
     
-    # Layer 5: Base64 decode
-    layer4 = b64d(layer5)
+    def create_session(self):
+        """Create a new session with SSL verification disabled for Termux"""
+        self.session = requests.Session()
+        
+        # ========== TERMUX FIX ==========
+        # Disable SSL verification
+        self.session.verify = False
+        
+        # Set headers
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8,pt;q=0.7,zh-CN;q=0.6,zh;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Sec-Ch-Ua': '"Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"',
+            'Sec-Ch-Ua-Mobile': '?1',
+            'Sec-Ch-Ua-Platform': '"Android"',
+            'Sec-Fetch-Site': 'same-origin',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-User': '?1',
+            'Sec-Fetch-Dest': 'document',
+            'Upgrade-Insecure-Requests': '1',
+            'Cache-Control': 'max-age=0'
+        })
+        self.csrf_token = None
+        self.is_logged_in = False
     
-    # Layer 4: Reverse
-    layer3 = rev(layer4)
+    def get_random_delay(self):
+        """Get random delay between 10-15 seconds"""
+        return random.uniform(self.min_delay, self.max_delay)
     
-    # Layer 3: zlib decompress + Base64 decode
-    layer2 = decompress(layer3)
+    def get_csrf_token(self, html_content):
+        """Extract CSRF token from HTML"""
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Try hidden input - FIXED: Use common token names
+        token_names = ['_token', 'csrf_token', 'csrf_token_name', 'csrf-token']
+        for name in token_names:
+            csrf_input = soup.find('input', {'name': name})
+            if csrf_input and csrf_input.get('value'):
+                return csrf_input.get('value')
+        
+        # Try meta tag
+        csrf_meta = soup.find('meta', {'name': 'csrf-token'})
+        if csrf_meta and csrf_meta.get('content'):
+            return csrf_meta.get('content')
+        
+        # Try JavaScript
+        script_pattern = re.compile(r'csrf_token_name\s*=\s*["\']([^"\']+)["\']')
+        match = script_pattern.search(html_content)
+        if match:
+            return match.group(1)
+        
+        # Try form
+        form_pattern = re.compile(r'name="([^"]+)"\s+value="([^"]+)"')
+        matches = form_pattern.findall(html_content)
+        for name, value in matches:
+            if 'token' in name.lower():
+                return value
+        
+        return None
     
-    # Layer 2: Base64 decode
-    layer1 = b64d(layer2)
+    def login(self):
+        """Perform fresh login - FIXED for Termux"""
+        self.create_session()
+        
+        print(f"{Colors.BLUE}🔑 Logging in: {self.email}{Colors.END}")
+        
+        try:
+            # Get login page for CSRF token
+            login_page = self.session.get(
+                urljoin(self.base_url, '/login'),
+                timeout=15,
+                allow_redirects=True
+            )
+            
+            if login_page.status_code != 200:
+                print(f"{Colors.RED}Failed to get login page: {login_page.status_code}{Colors.END}")
+                return False
+            
+            csrf_token = self.get_csrf_token(login_page.text)
+            if not csrf_token:
+                print(f"{Colors.RED}Failed to extract CSRF token{Colors.END}")
+                # Try to get token from cookies
+                for cookie in self.session.cookies:
+                    if 'token' in cookie.name.lower() or 'csrf' in cookie.name.lower():
+                        self.csrf_token = cookie.value
+                        print(f"{Colors.CYAN}Using CSRF from cookie: {cookie.name}={cookie.value[:20]}...{Colors.END}")
+                        break
+                if not self.csrf_token:
+                    return False
+            else:
+                self.csrf_token = csrf_token
+                print(f"{Colors.CYAN}CSRF token found: {csrf_token[:30]}...{Colors.END}")
+            
+            # Login data - FIXED: Use _token
+            login_data = {
+                '_token': self.csrf_token,
+                'email': self.email,
+                'password': self.password
+            }
+            
+            headers = {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Origin': self.base_url,
+                'Referer': urljoin(self.base_url, '/login')
+            }
+            
+            # Perform login - FIXED: Post to /login
+            login_response = self.session.post(
+                urljoin(self.base_url, '/login'),
+                data=login_data,
+                headers=headers,
+                allow_redirects=True,
+                timeout=15
+            )
+            
+            # Check if login successful
+            if 'dashboard' in login_response.url.lower() or 'logout' in login_response.text.lower() or 'Welcome' in login_response.text:
+                self.is_logged_in = True
+                self.failed_attempts = 0
+                print(f"{Colors.GREEN}✅ Login successful!{Colors.END}")
+                
+                # Update CSRF token
+                for cookie in self.session.cookies:
+                    if 'csrf' in cookie.name.lower() or 'token' in cookie.name.lower():
+                        self.csrf_token = cookie.value
+                        break
+                
+                return True
+            else:
+                print(f"{Colors.RED}Login failed - redirect to: {login_response.url}{Colors.END}")
+                return False
+                
+        except requests.RequestException as e:
+            print(f"{Colors.RED}Login failed: {e}{Colors.END}")
+            return False
+        except Exception as e:
+            print(f"{Colors.RED}Unexpected login error: {e}{Colors.END}")
+            return False
     
-    # Layer 1: Reverse (original)
-    original = rev(layer1)
+    def get_faucet_page(self):
+        """Get faucet page"""
+        if not self.is_logged_in:
+            return None
+        
+        try:
+            response = self.session.get(
+                urljoin(self.base_url, '/faucet'),
+                timeout=15
+            )
+            
+            if response.status_code != 200:
+                print(f"{Colors.RED}Failed to get faucet: {response.status_code}{Colors.END}")
+                return None
+            
+            if 'Login' in response.text and 'Log In' in response.text:
+                print(f"{Colors.YELLOW}⚠️ Redirected to login page{Colors.END}")
+                self.is_logged_in = False
+                return None
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Update CSRF token
+            csrf_token = self.get_csrf_token(response.text)
+            if csrf_token:
+                self.csrf_token = csrf_token
+            
+            # Check if claim already made
+            success_msg = soup.find('div', {'class': 'alert-success'})
+            if success_msg:
+                print(f"{Colors.GREEN}✅ {success_msg.text.strip()}{Colors.END}")
+                return {'success': True, 'message': success_msg.text.strip()}
+            
+            # Check for captcha or error message
+            error_msg = soup.find('div', {'class': 'alert-danger'})
+            if error_msg:
+                error_text = error_msg.text.strip()
+                if 'captcha' in error_text.lower() or 'verify' in error_text.lower():
+                    print(f"{Colors.RED}❌ CAPTCHA Required: {error_text}{Colors.END}")
+                    return {'captcha_required': True, 'message': error_text}
+                else:
+                    print(f"{Colors.YELLOW}⚠️ Error: {error_text}{Colors.END}")
+                    return {'error': True, 'message': error_text}
+            
+            details = {}
+            
+            # Claims left
+            claims_left = soup.find('strong', string=re.compile(r'\d+\s*/\s*\d+'))
+            if claims_left:
+                details['claims_left'] = claims_left.text.strip()
+                numbers = re.findall(r'\d+', claims_left.text)
+                if len(numbers) >= 2:
+                    current, total = map(int, numbers[:2])
+                    if current <= 0:
+                        print(f"{Colors.YELLOW}⚠️ Daily limit reached!{Colors.END}")
+                        return {'limit_reached': True}
+            
+            return details
+            
+        except requests.RequestException as e:
+            print(f"{Colors.RED}Failed to get faucet: {e}{Colors.END}")
+            return None
+        except Exception as e:
+            print(f"{Colors.RED}Unexpected error: {e}{Colors.END}")
+            return None
     
-    # Execute
-    exec(original)
+    def claim_faucet(self):
+        """Perform faucet claim"""
+        if not self.is_logged_in:
+            return False
+        
+        try:
+            # First get faucet page
+            faucet_data = self.get_faucet_page()
+            if not faucet_data:
+                return False
+            
+            if faucet_data.get('limit_reached'):
+                self.max_claims = 0
+                return False
+            
+            if faucet_data.get('success'):
+                return True
+            
+            if faucet_data.get('captcha_required'):
+                self.manual_claim_required = True
+                self.show_captcha_instructions()
+                return False
+            
+            if faucet_data.get('error'):
+                print(f"{Colors.RED}❌ Error on faucet page: {faucet_data.get('message')}{Colors.END}")
+                return False
+            
+            # Prepare claim - FIXED: Use _token
+            claim_data = {
+                '_token': self.csrf_token
+            }
+            
+            headers = {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Origin': self.base_url,
+                'Referer': urljoin(self.base_url, '/faucet')
+            }
+            
+            # Perform claim
+            claim_response = self.session.post(
+                urljoin(self.base_url, '/faucet/verify'),
+                data=claim_data,
+                headers=headers,
+                allow_redirects=True,
+                timeout=15
+            )
+            
+            if claim_response.status_code == 200:
+                soup = BeautifulSoup(claim_response.text, 'html.parser')
+                
+                # Check for error/captcha
+                error_msg = soup.find('div', {'class': 'alert-danger'})
+                if error_msg:
+                    error_text = error_msg.text.strip()
+                    if 'captcha' in error_text.lower() or 'verify' in error_text.lower():
+                        print(f"{Colors.RED}❌ CAPTCHA Required: {error_text}{Colors.END}")
+                        self.manual_claim_required = True
+                        self.show_captcha_instructions()
+                        return False
+                    else:
+                        print(f"{Colors.RED}❌ Claim error: {error_text}{Colors.END}")
+                        return False
+                
+                success_msg = soup.find('div', {'class': 'alert-success'})
+                if success_msg:
+                    self.claim_count += 1
+                    self.failed_attempts = 0
+                    print(f"{Colors.GREEN}✅ Claim #{self.claim_count}: {success_msg.text.strip()}{Colors.END}")
+                    
+                    # Update CSRF token
+                    new_token = self.get_csrf_token(claim_response.text)
+                    if new_token:
+                        self.csrf_token = new_token
+                    
+                    return True
+                else:
+                    print(f"{Colors.YELLOW}⚠️ No success message found{Colors.END}")
+                    return False
+            else:
+                print(f"{Colors.RED}Claim failed: {claim_response.status_code}{Colors.END}")
+                return False
+                
+        except requests.RequestException as e:
+            print(f"{Colors.RED}Claim failed: {e}{Colors.END}")
+            return False
+        except Exception as e:
+            print(f"{Colors.RED}Unexpected claim error: {e}{Colors.END}")
+            return False
     
-except Exception as e:
-    print(f"❌ Decryption Failed: {e}")
-    sys.exit(1)
+    def show_captcha_instructions(self):
+        """Show instructions for manual captcha solving"""
+        print(f"\n{Colors.BOLD}{Colors.RED}{'='*60}{Colors.END}")
+        print(f"{Colors.BOLD}{Colors.RED}🔐 CAPTCHA DETECTED!{Colors.END}")
+        print(f"{Colors.BOLD}{Colors.RED}{'='*60}{Colors.END}")
+        print(f"\n{Colors.YELLOW}⚠️  The bot has detected a CAPTCHA verification.{Colors.END}")
+        print(f"{Colors.CYAN}📌 Please complete the following steps manually:{Colors.END}")
+        print(f"\n{Colors.BOLD}{Colors.GREEN}1️⃣{Colors.END} {Colors.BLUE}Go to the website in your browser:{Colors.END}")
+        print(f"   {Colors.CYAN}{self.base_url}/faucet{Colors.END}")
+        print(f"\n{Colors.BOLD}{Colors.GREEN}2️⃣{Colors.END} {Colors.BLUE}Complete the CAPTCHA verification{Colors.END}")
+        print(f"\n{Colors.BOLD}{Colors.GREEN}3️⃣{Colors.END} {Colors.BLUE}Claim the faucet {Colors.BOLD}{Colors.RED}TWO{Colors.END} {Colors.BLUE}times manually{Colors.END}")
+        print(f"\n{Colors.BOLD}{Colors.GREEN}4️⃣{Colors.END} {Colors.BLUE}Press {Colors.BOLD}{Colors.YELLOW}ENTER{Colors.END} {Colors.BLUE}after completing both claims{Colors.END}")
+        print(f"\n{Colors.BOLD}{Colors.RED}{'='*60}{Colors.END}")
+        
+        input(f"\n{Colors.GREEN}✅ Press ENTER after completing CAPTCHA and 2 manual claims...{Colors.END}")
+        
+        self.manual_claim_required = False
+        self.failed_attempts = 0
+        
+        print(f"{Colors.BLUE}🔄 Re-logging after manual claims...{Colors.END}")
+        time.sleep(3)
+    
+    def run_infinite_loop(self):
+        """Main loop with auto-relogin on failure"""
+        print(f"\n{Colors.BOLD}{Colors.CYAN}{'='*60}{Colors.END}")
+        print(f"{Colors.BOLD}{Colors.GREEN}🚀 Starting infinite faucet claim loop{Colors.END}")
+        print(f"{Colors.BOLD}{Colors.BLUE}📊 Daily limit: {self.max_claims} claims{Colors.END}")
+        print(f"{Colors.BOLD}{Colors.YELLOW}⏱️  Random delays: {self.min_delay}-{self.max_delay}s between claims{Colors.END}")
+        print(f"{Colors.BOLD}{Colors.RED}⏹️  Press Ctrl+C to stop{Colors.END}")
+        print(f"{Colors.BOLD}{Colors.CYAN}{'='*60}{Colors.END}\n")
+        
+        while True:
+            try:
+                if self.manual_claim_required:
+                    self.show_captcha_instructions()
+                    continue
+                
+                if not self.login():
+                    print(f"{Colors.RED}❌ Login failed, retrying in 10s...{Colors.END}")
+                    time.sleep(10)
+                    continue
+                
+                while True:
+                    try:
+                        if self.manual_claim_required:
+                            break
+                        
+                        faucet_data = self.get_faucet_page()
+                        if not faucet_data:
+                            print(f"{Colors.YELLOW}⚠️ Failed to get faucet page{Colors.END}")
+                            time.sleep(self.get_random_delay())
+                            continue
+                        
+                        if faucet_data.get('limit_reached'):
+                            print(f"{Colors.YELLOW}🎯 Daily limit reached! Waiting 6 hours...{Colors.END}")
+                            time.sleep(6 * 60 * 60)
+                            continue
+                        
+                        if faucet_data.get('captcha_required'):
+                            self.manual_claim_required = True
+                            break
+                        
+                        if self.claim_faucet():
+                            wait_time = self.get_random_delay()
+                            print(f"{Colors.CYAN}⏳ Waiting {wait_time:.2f}s for next claim...{Colors.END}")
+                            time.sleep(wait_time)
+                        else:
+                            print(f"{Colors.YELLOW}⚠️ Claim failed, waiting before retry...{Colors.END}")
+                            wait_time = self.get_random_delay()
+                            time.sleep(wait_time)
+                            
+                    except Exception as e:
+                        print(f"{Colors.RED}❌ Claim loop error: {e}{Colors.END}")
+                        time.sleep(self.get_random_delay())
+                
+                if self.manual_claim_required:
+                    self.show_captcha_instructions()
+                    
+            except KeyboardInterrupt:
+                print(f"\n{Colors.BOLD}{Colors.CYAN}{'='*60}{Colors.END}")
+                print(f"{Colors.BOLD}{Colors.RED}🛑 Stopped by user{Colors.END}")
+                print(f"{Colors.BOLD}{Colors.GREEN}📊 Total claims: {self.claim_count}{Colors.END}")
+                print(f"{Colors.BOLD}{Colors.CYAN}{'='*60}{Colors.END}")
+                break
+            except Exception as e:
+                print(f"{Colors.RED}❌ Fatal error: {e}{Colors.END}")
+                time.sleep(10)
+
+def main():
+    """Main entry point"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='FreeLTC Faucet Automation')
+    parser.add_argument('--once', '-o', action='store_true', help='Run once')
+    parser.add_argument('--claims', '-c', type=int, default=1000, help='Daily claim limit')
+    parser.add_argument('--min-delay', type=int, default=10, help='Minimum delay between claims (seconds)')
+    parser.add_argument('--max-delay', type=int, default=15, help='Maximum delay between claims (seconds)')
+    
+    args = parser.parse_args()
+    
+    print(f"\n{Colors.BOLD}{Colors.CYAN}{'='*60}{Colors.END}")
+    print(f"{Colors.BOLD}{Colors.YELLOW}🪙  FreeLTC Faucet Automation Bot{Colors.END}")
+    print(f"{Colors.BOLD}{Colors.CYAN}{'='*60}{Colors.END}")
+    
+    faucet = FreeLTCFaucet()
+    faucet.max_claims = args.claims
+    faucet.min_delay = args.min_delay
+    faucet.max_delay = args.max_delay
+    
+    if not faucet.get_credentials():
+        sys.exit(1)
+    
+    try:
+        if args.once:
+            if faucet.login():
+                faucet.get_faucet_page()
+                print(f"\n{Colors.GREEN}✅ Login successful. Use without --once for continuous claiming.{Colors.END}")
+        else:
+            faucet.run_infinite_loop()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"{Colors.RED}❌ Fatal error: {e}{Colors.END}")
+        raise
+
+if __name__ == "__main__":
+    main()
