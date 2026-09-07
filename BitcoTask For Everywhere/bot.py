@@ -99,8 +99,8 @@ function displayBanner() {
     echo "╭" . str_repeat('─', $width) . "╮\n";
     echo "│ BITCOTASKS BOT (PTC)" . str_repeat(' ', $width - 20) . "│\n";
     echo "├" . str_repeat('─', $width) . "┤\n";
-    echo "│ 📱 TG: https://t.me/bypassallshortlinks1" . str_repeat(' ', $width - 39) . "│\n";
-    echo "│ 💻 Developer: Abdul Qayoom Boohar" . str_repeat(' ', $width - 33) . "│\n";
+    echo "│ 📱 TG: https://t.me/Scriptify1" . str_repeat(' ', $width - 39) . "│\n";
+    echo "│ 💻 Developer: Myra" . str_repeat(' ', $width - 33) . "│\n";
     echo "╰" . str_repeat('─', $width) . "╯\n\n";
 }
 
