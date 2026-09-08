@@ -37,6 +37,10 @@ function ejp($js){
 
 function timer($s){for($i=$s;$i>=1;$i--){echo"\r\033[K  ├─ ⏳ ".str_pad($i,2,' ',STR_PAD_LEFT)."s...";flush();if($i>1)sleep(1);}echo"\r\033[K  ├─ Viewed ✅\n";flush();}
 
+function saveCap($img,$info=''){global $UA;$dir=__DIR__.'/captchas';if(!is_dir($dir))mkdir($dir,0777,true);$fn=$dir.'/cap_'.date('Ymd_His').'_'.mt_rand(1000,9999).'.gif';
+  if(preg_match('#^data:image/[^;]+;base64,(.+)$#s',$img,$m))$img=$m[1];
+  $raw=base64_decode($img);if($raw){file_put_contents($fn,$raw);if($info)file_put_contents($fn.'.txt',$info);}
+}
 function scap($url,$html,$q=false,$retry=1){global $UA;
   for($attempt=0;$attempt<=$retry;$attempt++){
     if($attempt>0){if(!$q)echo"  ├─ 🔄 Retry attempt $attempt...\n";sleep(2);}
@@ -59,22 +63,20 @@ function scap($url,$html,$q=false,$retry=1){global $UA;
     }
     if(empty($d['image'])&&empty($d['options'])){if(!$q)echo"  ├─ ❌ No captcha data\n";continue;}
     $cm=!empty($d['image'])&&empty($d['options']);$sl=null;$sel=null;
+    $cimg=$cm?($d['image']??''):($d['pixel']??'');
     if($cm){[$cx,$cy]=aclick($d['image'],$q);if($cx===null){if(!$q)echo"  ├─ ❌ Solve fail\n";continue;}$sel=[$cx,$cy];}
     else{$opx=array_map(fn($o)=>$o['pixels']??'',$d['options']??[]);$odm=array_map(fn($o)=>[$o['width']??32,$o['height']??32],$d['options']??[]);[$sl]=asolve($d['pixel']??'',$opx,$odm,$q);if($sl===null){if(!$q)echo"  ├─ ❌ Solve fail\n";continue;}}
-    $pw=!empty($d['challenge'])?spow($d['challenge'],$d['difficulty']??4):null;
-    $el=rand(3e3,8e3);$mv=rand(5,15);$cf=rand(300,500);$ch=$d['challenge']??'';$n=$pw['nonce']??0;$bh=hash('sha256',"$el:$n:$ch");
-    $vp=[$fn1=>$fv,$fn2=>json_encode($cm?$sel:[(int)$sl]),'_et'=>"$el",'_mv'=>"$mv",'_cf'=>"$cf",'_pw'=>$pw?json_encode($pw):'null','_ch'=>$ch,'_bh'=>$bh];
+    $vp=[$fn1=>$fv,$fn2=>json_encode($cm?$sel:[(int)$sl])];
     [$vb,$e]=rq('POST',uj($url,$ve),http_build_query($vp),array_merge($h,['Content-Type:application/x-www-form-urlencoded']),$url);
     if($e){if(!$q)echo"  ├─ ❌ Val fail\n";continue;}
     $r=json_decode($vb,true);
     if(!$r){if(!$q)echo"  ├─ ❌ Val parse fail\n";continue;}
-    if(!empty($r[$s])){$tk=$r[$t]??null;
-      if(!$tk)foreach($r as$v)if(is_string($v)&&preg_match('/^[a-f0-9]{32,}$/i',$v)){$tk=$v;break;}
-      if($tk)return$tk;
-      if(!$q)echo"  ├─ ❌ No token\n";continue;
-    }
-    foreach($r as$k=>$v)if($v===true){$s=$k;break;}
-    if(!empty($r[$s])){$tk=$r[$t]??null;if(!$tk)foreach($r as$v)if(is_string($v)&&preg_match('/^[a-f0-9]{32,}$/i',$v)){$tk=$v;break;}if($tk)return$tk;}
+    $ok=false;
+    if(!empty($r[$s])){$tk=$r[$t]??null;if($tk)$ok=true;}
+    if(!$ok){foreach($r as$k=>$v)if($v===true){$s=$k;break;}if(!empty($r[$s])){$tk=$r[$t]??null;if($tk)$ok=true;}}
+    $info="answer:".json_encode($cm?$sel:[(int)$sl])."\nresponse:".json_encode($r)."\ntype:".($cm?'click':'select')."\nresult:".($ok?'success':'fail');
+    if($cimg)saveCap($cimg,$info);
+    if($ok)return$tk;
     if(!$q)echo"  ├─ ❌ Val err\n";
   }
   return false;
@@ -92,13 +94,15 @@ function pal($pg,$url,$n,$t,$ti,$rw,$q=false,$retry=1){global $UA;
     if(!$ct&&preg_match('/let\s+ctoken\s*=\s*[\'"]([^\'"]+)[\'"]/',$pg,$m))$ct=$m[1];
     if(!$ct&&preg_match_all('/<input[^>]+type\s*=\s*["\']hidden["\'][^>]*name\s*=\s*["\']([^"\']+)["\']/i',$pg,$ms)){foreach($ms[1]as$n2){if(stripos($n2,'captcha')!==false||stripos($n2,'token')!==false||stripos($n2,'ctn')!==false||stripos($n2,'crtk')!==false){$ct=$n2;break;}}if(!$ct&&!empty($ms[1]))$ct=end($ms[1]);}
     if(!$ct){if(!$q)echo"  ├─ ❌ No ctn field\n";return false;}
-    if(preg_match('/var (?:duration|timer)\s*=\s*(\d+);/',$pg,$m)){rq('POST',$url,['action'=>'start_view'],['X-Requested-With: XMLHttpRequest','Origin:https://bitcotasks.com','User-Agent:'.$UA],$url);timer((int)$m[1]);}elseif(!$q)echo"  ├─ Viewed ✅\n";
     $tk=scap($url,$pg,$q,2);if(!$tk){if(!$q)echo"  ├─ ❌ Captcha fail\n";continue;}
-    $ad=['hash'=>$v['hash'],'sub_id'=>$v['sub_id'],'key'=>$v['key'],'token'=>$v['token'],$ct=>$tk,'action'=>'proccessLead'];
-    [$b,$e]=rq('POST','https://bitcotasks.com/system/ajax.php',$ad,['User-Agent:'.$UA,'Content-Type:application/x-www-form-urlencoded','Origin:https://bitcotasks.com'],$url);
+    rq('POST',$url,['action'=>'start_view'],['X-Requested-With: XMLHttpRequest','Origin:https://bitcotasks.com','User-Agent:'.$UA],$url);
+    if(preg_match('/var (?:duration|timer)\s*=\s*(\d+(?:\s*[-+]\s*\d+)*);/',$pg,$m)){$dur=eval('return '.$m[1].';');timer($dur);}
+    else{if(!$q)echo"  ├─ ⏳ Waiting 5s...\n";sleep(5);}
+    $ad=['hash'=>$v['hash'],'sub_id'=>$v['sub_id'],'key'=>$v['key'],'token'=>$v['token'],'action'=>'proccessLead',$ct=>$tk];
+    [$b,$e]=rq('POST','https://bitcotasks.com/system/ajax.php',$ad,['User-Agent:'.$UA,'Content-Type:application/x-www-form-urlencoded; charset=UTF-8','Origin:https://bitcotasks.com','X-Requested-With:XMLHttpRequest'],$url);
     if($e){if(!$q)echo"  ├─ ❌ Lead err\n";return false;}
     $r=json_decode($b,true);if(!$r){if(!$q)echo"  ├─ ❌ Lead parse\n";return false;}
-    if(($r['status']??0)===200){echo"  ├─ ✅ ".strip_tags($r['message']??"+$rw")."\n";return true;}
+    if(($r['status']??0)==200){echo"  ├─ ✅ ".strip_tags($r['message']??"+$rw")."\n";return true;}
     $msg=strip_tags($r['message']??'');
     if(stripos($msg,'captcha')!==false||stripos($msg,'invalid')!==false||stripos($msg,'expired')!==false){
       if(!$q)echo"  ├─ ⚠️ $msg — retrying\n";continue;
@@ -116,8 +120,26 @@ function ptc($tk,$ad,$bu,$n=1,$t=1){global $UA;$w=54;$ti=$ad['title']??'Unknown'
   echo "├".str_repeat('─',$w)."┤\n";
   echo cw("│ 📌 ",tr($ti,$w-4),$w);
   echo cw("│ 💰 ",tr($rw,$w-4),$w);
-  echo cw("│  ","▶ Init...",$w);
-  [$b,$e]=rq('POST',$bu,['hash'=>$ad['hash'],'sid'=>$ad['sid']??'','key'=>$ad['key'],'type'=>'ptc','token'=>$tk,'action'=>'init_transaction'],['X-Requested-With: XMLHttpRequest','Origin:https://bitcotasks.com','User-Agent:'.$UA],$bu);$ok=false;if(!$e){$rs=json_decode($b,true);if($rs&&($rs['status']??0)!==999&&isset($rs['offer'])){$au=$rs['offer'];echo"\r\033[K";echo cw("│ ","▶ Init ✅",$w);echo cw("│  ","▶ Load...",$w);[$pg,$e2]=rq('GET',$au,null,['Accept:text/html','Accept-Language:en-GB,en;q=0.9','User-Agent:'.$UA],$bu);if(!$e2){echo"\r\033[K";echo cw("│ ","▶ Load ✅",$w);$ok=pal($pg,$au,$n,$t,$ti,$rw);}}}$s=$ok?'✅ DONE':'❌ FAILED';echo ($ok?"\r\033[K".cw("│ ","▶ Done ✅",$w):"").cw("│ ",tr($s,$w-2),$w)."╰".str_repeat('─',$w)."╯\n\n";return$ok;}
+  $ok=false;
+  for($attempt=0;$attempt<3;$attempt++){
+    if($attempt>0){echo cw("│  ","▶ Re-fetching view URL...",$w);sleep(rand(2,4));}
+    echo "\r\033[K";echo cw("│  ","▶ Init...",$w);
+    [$b,$e]=rq('POST',$bu,['hash'=>$ad['hash'],'sid'=>$ad['sid']??'','key'=>$ad['key'],'type'=>'ptc','token'=>$tk,'action'=>'init_transaction'],['X-Requested-With: XMLHttpRequest','Origin:https://bitcotasks.com','User-Agent:'.$UA],$bu);
+    if($e)continue;
+    $rs=json_decode($b,true);
+    if(!$rs||($rs['status']??0)===999||!isset($rs['offer']))continue;
+    $au=$rs['offer'];
+    echo "\r\033[K";echo cw("│ ","▶ Init ✅",$w);echo cw("│  ","▶ Load...",$w);
+    [$pg,$e2]=rq('GET',$au,null,['Accept:text/html','Accept-Language:en-GB,en;q=0.9','User-Agent:'.$UA],$bu);
+    if($e2)continue;
+    echo "\r\033[K";echo cw("│ ","▶ Load ✅",$w);
+    $ok=pal($pg,$au,$n,$t,$ti,$rw);
+    if($ok)break;
+  }
+  $s=$ok?'✅ DONE':'❌ FAILED';
+  echo ($ok?"\r\033[K".cw("│ ","▶ Done ✅",$w):"").cw("│ ",tr($s,$w-2),$w)."╰".str_repeat('─',$w)."╯\n\n";
+  return$ok;
+}
 function ploop($tk,$as,$bu){$sc=0;$fa=[];foreach($as as$i=>$a){$n=$i+1;if($i>0){$dl=rand(3,5);echo"\n  ├─ ⏳ Waiting {$dl}s before next ad...\n";sleep($dl);}echo"\n--- Ad $n/".count($as)." ---\n";if(ptc($tk,$a,$bu,$n,count($as)))$sc++;else $fa[]=$a;}return[$sc,$fa];}
 function eks($u){$p=parse_url($u);$k=$s=null;if(isset($p['query'])){parse_str($p['query'],$q);$k=$q['key']??null;$s=$q['sub_id']??null;}if(!$k||!$s){$pp=explode('/',trim($p['path']??'', '/'));if(count($pp)>=3&&$pp[0]==='offerwall'){$k=$pp[1];$s=$pp[2];}}return[$k,$s];}
 
