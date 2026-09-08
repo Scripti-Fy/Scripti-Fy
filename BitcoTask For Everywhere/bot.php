@@ -1,1080 +1,180 @@
 <?php
-
 error_reporting(E_ALL & ~E_DEPRECATED);
+$API_KEY=$curl=null;
+$UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36';
+define('AK',__DIR__.'/BASkey.txt');
 
-defined('API_URL') or define('API_URL', 'https://bypassallshortlinks.space/api.php');
-defined('API_KEY_FILE') or define('API_KEY_FILE', 'BASkey.txt');
-defined('API_TIMEOUT') or define('API_TIMEOUT', 300);
-defined('CONNECTION_TIMEOUT') or define('CONNECTION_TIMEOUT', 30);
-defined('READ_TIMEOUT') or define('READ_TIMEOUT', 30);
+function gc(){global $curl;if(!$curl){$curl=curl_init();curl_setopt_array($curl,[CURLOPT_COOKIEFILE=>__DIR__.'/cookies.txt',CURLOPT_COOKIEJAR=>__DIR__.'/cookies.txt',CURLOPT_RETURNTRANSFER=>true,CURLOPT_HEADER=>false,CURLOPT_CONNECTTIMEOUT=>30,CURLOPT_TIMEOUT=>30,CURLOPT_FOLLOWLOCATION=>true,CURLOPT_MAXREDIRS=>5,CURLOPT_ENCODING=>'',CURLOPT_SSL_VERIFYPEER=>false,CURLOPT_SSL_VERIFYHOST=>false]);}return $curl;}
+function rq($m,$u,$d=null,$h=[],$r=null,$j=false,$f=true){$ch=gc();curl_setopt_array($ch,[CURLOPT_URL=>$u,CURLOPT_FOLLOWLOCATION=>$f,CURLOPT_CUSTOMREQUEST=>strtoupper($m)]);$x=$r?['Referer:'.$r]:[];if(strtoupper($m)==='POST'){$b=$j&&is_array($d)?json_encode($d):(is_array($d)?http_build_query($d):$d);if($j&&is_array($d))$x[]='Content-Type:application/json';elseif(is_array($d))$x[]='Content-Type:application/x-www-form-urlencoded;charset=UTF-8';curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>$b]);}else curl_setopt_array($ch,[CURLOPT_POST=>false,CURLOPT_POSTFIELDS=>null]);curl_setopt($ch,CURLOPT_HTTPHEADER,array_merge($x,$h));for($i=0;$i<2;$i++){$rs=curl_exec($ch);if($rs!==false)break;if($i<1)usleep(500000);}return[$rs,curl_error($ch),curl_getinfo($ch)];}
+function uj($b,$r){if(preg_match('#^[a-z][a-z0-9+.-]*://#i',$r))return $r;$p=parse_url($b);$s=$p['scheme']??'https';$h=$p['host']??'';$pt=isset($p['port'])?':'.$p['port']:'';if(strpos($r,'/')===0)return"$s://$h$pt$r";$d=str_replace('\\','/',dirname($p['path']??'/'));return"$s://$h$pt".rtrim($d,'/')."/$r";}
+function pb64($p,$w,$h){if(empty($p))return'';$r=base64_decode($p);if(!$r)return'';$i=imagecreatetruecolor($w,$h);if(!$i)return'';imagealphablending($i,false);imagesavealpha($i,true);$b=unpack('C*',$r);if(!$b){imagedestroy($i);return'';}$bi=1;for($n=0,$t=$w*$h;$n<$t;$n++){$x=$n%$w;$y=(int)($n/$w);$cr=$b[$bi++]??0;$cg=$b[$bi++]??0;$cb=$b[$bi++]??0;$ca=$b[$bi++]??0;$c=($w<64&&$ca<100)?imagecolorallocatealpha($i,255,255,255,127):imagecolorallocatealpha($i,$cr,$cg,$cb,127-(int)(($ca*127)/255));imagesetpixel($i,$x,$y,$c);}ob_start();imagepng($i);$r=base64_encode(ob_get_clean());imagedestroy($i);return $r;}
 
-$API_KEY = null;
-$curl = null;
+function asolve($m,$o,$d,$q=false){global $API_KEY;$mb=pb64($m,200,100);$ob=[];foreach($o as $i=>$v)$ob[]=pb64($v,$d[$i][0]??32,$d[$i][1]??32);$ob=array_pad($ob,8,'');$b='https://bypassallshortlinks.space';$ch=curl_init($b.'/in.php');curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>['key'=>$API_KEY,'method'=>'bitcotasks_select','main'=>$mb,'options'=>json_encode($ob)],CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>30,CURLOPT_CONNECTTIMEOUT=>30,CURLOPT_SSL_VERIFYPEER=>false,CURLOPT_SSL_VERIFYHOST=>false]);$rs=curl_exec($ch);curl_close($ch);if($rs===false){if(!$q)echo"  ├─ ⚠️ API timeout\n";return[null,null];}$tid=null;if(preg_match('/^OK\|(.+)$/s',trim($rs),$m))$tid=trim($m[1]);else{$j=json_decode($rs,true);if($j&&!empty($j['request']))$tid=$j['request'];}if(!$tid){if(!$q)echo"  ├─ ❌ API: ".substr(trim($rs),0,60)."\n";return[null,null];}for($i=0;$i<40;$i++){sleep(3);$p=curl_init($b.'/res.php?key='.urlencode($API_KEY).'&action=get&id='.urlencode($tid).'&json=1');curl_setopt_array($p,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>15,CURLOPT_SSL_VERIFYPEER=>false,CURLOPT_SSL_VERIFYHOST=>false]);$pr=curl_exec($p);curl_close($p);if($pr===false)continue;$pr=trim($pr);if(preg_match('/^OK\|(.+)$/s',$pr,$m))return[trim($m[1]),null];$pd=json_decode($pr,true);if(!$pd)continue;if(isset($pd['status'])&&$pd['status']==1){$r=$pd['request']??null;if(is_string($r))return[trim($r),null];return[null,null];}$r=$pd['request']??'';if(strpos($r,'ERROR')!==false){if(!$q)echo"  ├─ ❌ $r\n";return[null,null];}}if(!$q)echo"  ├─ ⏱️ API timeout\n";return[null,null];}
+function aclick($img,$q=false){global $API_KEY;if(preg_match('#^data:image/[^;]+;base64,(.+)$#s',$img,$m))$img=$m[1];$b='https://bypassallshortlinks.space';$ch=curl_init($b.'/in.php');curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>['key'=>$API_KEY,'method'=>'bitcotasks_click','image'=>$img],CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>30,CURLOPT_CONNECTTIMEOUT=>30,CURLOPT_SSL_VERIFYPEER=>false,CURLOPT_SSL_VERIFYHOST=>false]);$rs=curl_exec($ch);curl_close($ch);if($rs===false){if(!$q)echo"  ├─ ⚠️ Click fail\n";return[null,null];}$tid=null;if(preg_match('/^OK\|(.+)$/s',trim($rs),$m))$tid=trim($m[1]);else{$j=json_decode($rs,true);if($j&&!empty($j['request']))$tid=$j['request'];}if(!$tid){if(!$q)echo"  ├─ ❌ Click err\n";return[null,null];}for($i=0;$i<40;$i++){sleep(3);$p=curl_init($b.'/res.php?key='.urlencode($API_KEY).'&action=get&id='.urlencode($tid).'&json=1');curl_setopt_array($p,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>15,CURLOPT_SSL_VERIFYPEER=>false,CURLOPT_SSL_VERIFYHOST=>false]);$pr=curl_exec($p);curl_close($p);if($pr===false)continue;$pr=trim($pr);if(preg_match('/^OK\|(.+)$/s',$pr,$m)){$c=array_map('intval',explode(',',trim($m[1],'[] ')));if(count($c)>=2)return[$c[0],$c[1]];return[null,null];}$pd=json_decode($pr,true);if(!$pd)continue;if(isset($pd['status'])&&$pd['status']==1){$c=$pd['request']??null;if(is_string($c)){$c=array_map('intval',explode(',',trim($c,'[] ')));if(count($c)>=2)return[$c[0],$c[1]];}elseif(is_array($c)&&count($c)>=2)return[(int)$c[0],(int)$c[1]];return[null,null];}$r=$pd['request']??'';if(strpos($r,'ERROR')!==false){if(!$q)echo"  ├─ ❌ $r\n";return[null,null];}}if(!$q)echo"  ├─ ⏱️ Click timeout\n";return[null,null];}
+function spow($c,$d){if(empty($c))return null;$p=str_repeat('0',(int)$d);for($n=0;$n<2e6;$n++){$h=hash('sha256',"$c:$n");if(strncmp($h,$p,strlen($p))===0)return['nonce'=>$n,'hash'=>$h];}return null;}
 
-function getCurl() {
-    global $curl;
-    if (!$curl) {
-        $curl = curl_init();
-        curl_setopt($curl, CURLOPT_COOKIEFILE, __DIR__ . '/cookies.txt');
-        curl_setopt($curl, CURLOPT_COOKIEJAR, __DIR__ . '/cookies.txt');
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($curl, CURLOPT_HEADER, false);
-        curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, CONNECTION_TIMEOUT);
-        curl_setopt($curl, CURLOPT_TIMEOUT, READ_TIMEOUT);
-        curl_setopt($curl, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($curl, CURLOPT_MAXREDIRS, 5);
-        curl_setopt($curl, CURLOPT_ENCODING, '');
-        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
-    }
-    return $curl;
+function ejp($js){
+  $fn1=$fv=$fn2=$s=$t=$pe=$ve=null;
+  if(preg_match('/var\s+payload\s*=\s*"([^"]+)"/',$js,$m)){[$a,$b]=explode('&',$m[1]);if(!$b)return null;[$fn1,$fv]=explode('=',$a,2);$fn2=explode('=',$b)[0];}
+  else{if(!preg_match('/var\s+payload\s*=\s*"([^=]+)=([^&]+)&([^=]+)="/',$js,$m))return null;$fn1=$m[1];$fv=$m[2];$fn2=$m[3];}
+  if(preg_match('/if\s*\(response\.([A-Za-z0-9]+)\)/',$js,$m))$s=$m[1];
+  elseif(preg_match('/if\s*\(\s*response\s*\.\s*([A-Za-z0-9]+)/',$js,$m))$s=$m[1];
+  elseif(preg_match('/\.([A-Za-z0-9]{4,})\s*===?\s*true/',$js,$m))$s=$m[1];
+  if(!$s)return null;
+  if(preg_match('/value\s*=\s*response\.([A-Za-z0-9]+)/',$js,$m))$t=$m[1];
+  elseif(preg_match('/token\s*=\s*response\.([A-Za-z0-9]+)/',$js,$m))$t=$m[1];
+  elseif(preg_match('/\.\s*([A-Za-z0-9]{4,})\s*\)\s*\{[^}]*?token/i',$js,$m))$t=$m[1];
+  if(!$t)return null;
+  if(preg_match('#fetch\("(/captcha2/[^"]+)"#',$js,$m))$pe=$m[1];
+  elseif(preg_match("#fetch\('(/captcha2/[^']+)'#",$js,$m))$pe=$m[1];
+  if(!$pe)return null;
+  if(preg_match('/xhr\.open\("POST",\s*"([^"]+)"/',$js,$m))$ve=$m[1];
+  elseif(preg_match("/xhr\.open\('POST',\s*'([^']+)'/",$js,$m))$ve=$m[1];
+  elseif(preg_match('/\.open\s*\(\s*"POST"\s*,\s*"([^"]+)"/',$js,$m))$ve=$m[1];
+  if(!$ve)return null;
+  return[$fn1,$fv,$fn2,$s,$t,$pe,$ve];
 }
 
-function request($method, $url, $data = null, $extraHeaders = [], $referer = null, $json = false, $followRedirects = true) {
-    $ch = getCurl();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, $followRedirects);
-    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, strtoupper($method));
+function timer($s){for($i=$s;$i>=1;$i--){echo"\r\033[K  ├─ ⏳ ".str_pad($i,2,' ',STR_PAD_LEFT)."s...";flush();if($i>1)sleep(1);}echo"\r\033[K  ├─ Viewed ✅\n";flush();}
 
-    $headers = [];
-    if ($referer) $headers[] = 'Referer: ' . $referer;
-
-    if (strtoupper($method) === 'POST') {
-        if ($json && is_array($data)) {
-            $body = json_encode($data);
-            $headers[] = 'Content-Type: application/json';
-        } elseif (is_array($data)) {
-            $body = http_build_query($data);
-            $headers[] = 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8';
-        } else {
-            $body = $data;
-        }
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-    } else {
-        curl_setopt($ch, CURLOPT_POST, false);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, null);
+function scap($url,$html,$q=false,$retry=1){global $UA;
+  for($attempt=0;$attempt<=$retry;$attempt++){
+    if($attempt>0){if(!$q)echo"  ├─ 🔄 Retry attempt $attempt...\n";sleep(2);}
+    if(!preg_match('/src="(\/captcha2\/[^"]+\.js\?[^"]+)"/',$html,$m)){if(!$q)echo"  ├─ ❌ No captcha JS\n";return false;}
+    $h=['User-Agent:'.$UA];
+    [$j,$e]=rq('GET',uj($url,$m[1]),null,$h,$url);
+    if($e){if(!$q)echo"  ├─ ❌ JS fail\n";continue;}
+    $p=ejp($j);
+    if(!$p){if(!$q)echo"  ├─ ❌ Params fail\n";continue;}
+    [$fn1,$fv,$fn2,$s,$t,$pe,$ve]=$p;
+    [$cd,$e]=rq('POST',uj($url,$pe),['t'=>(int)(microtime(true)*1e3),'r'=>mt_rand()/mt_getrandmax()],array_merge($h,['Content-Type:application/json']),$url,true);
+    if($e){if(!$q)echo"  ├─ ❌ Data fail\n";continue;}
+    $d=json_decode($cd,true);
+    if(!$d){if(!$q)echo"  ├─ ❌ Parse fail\n";continue;}
+    if(!empty($d['error'])){
+      $err=$d['error'];
+      if($err==='rate_limited'){if(!$q)echo"  ├─ ⏱️ Rate limited, waiting ".($d['retryAfter']??60)."s\n";sleep($d['retryAfter']??60);continue;}
+      if($err==='busy'&&$attempt<$retry){if(!$q)echo"  ├─ ⚠️ Busy, retrying\n";sleep(rand(1,3));continue;}
+      if(!$q)echo"  ├─ ❌ API: $err\n";continue;
     }
-
-    foreach ($extraHeaders as $h) {
-        $headers[] = $h;
+    if(empty($d['image'])&&empty($d['options'])){if(!$q)echo"  ├─ ❌ No captcha data\n";continue;}
+    $cm=!empty($d['image'])&&empty($d['options']);$sl=null;$sel=null;
+    if($cm){[$cx,$cy]=aclick($d['image'],$q);if($cx===null){if(!$q)echo"  ├─ ❌ Solve fail\n";continue;}$sel=[$cx,$cy];}
+    else{$opx=array_map(fn($o)=>$o['pixels']??'',$d['options']??[]);$odm=array_map(fn($o)=>[$o['width']??32,$o['height']??32],$d['options']??[]);[$sl]=asolve($d['pixel']??'',$opx,$odm,$q);if($sl===null){if(!$q)echo"  ├─ ❌ Solve fail\n";continue;}}
+    $pw=!empty($d['challenge'])?spow($d['challenge'],$d['difficulty']??4):null;
+    $el=rand(3e3,8e3);$mv=rand(5,15);$cf=rand(300,500);$ch=$d['challenge']??'';$n=$pw['nonce']??0;$bh=hash('sha256',"$el:$n:$ch");
+    $vp=[$fn1=>$fv,$fn2=>json_encode($cm?$sel:[(int)$sl]),'_et'=>"$el",'_mv'=>"$mv",'_cf'=>"$cf",'_pw'=>$pw?json_encode($pw):'null','_ch'=>$ch,'_bh'=>$bh];
+    [$vb,$e]=rq('POST',uj($url,$ve),http_build_query($vp),array_merge($h,['Content-Type:application/x-www-form-urlencoded']),$url);
+    if($e){if(!$q)echo"  ├─ ❌ Val fail\n";continue;}
+    $r=json_decode($vb,true);
+    if(!$r){if(!$q)echo"  ├─ ❌ Val parse fail\n";continue;}
+    if(!empty($r[$s])){$tk=$r[$t]??null;
+      if(!$tk)foreach($r as$v)if(is_string($v)&&preg_match('/^[a-f0-9]{32,}$/i',$v)){$tk=$v;break;}
+      if($tk)return$tk;
+      if(!$q)echo"  ├─ ❌ No token\n";continue;
     }
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-    $retries = 2;
-    $response = null;
-    $error = null;
-    for ($i = 0; $i < $retries; $i++) {
-        $response = curl_exec($ch);
-        if ($response !== false) {
-            $error = null;
-            break;
-        }
-        $error = curl_error($ch);
-        if ($i < $retries - 1) usleep(500000);
-    }
-
-    $info = curl_getinfo($ch);
-    return [$response, $error, $info];
+    foreach($r as$k=>$v)if($v===true){$s=$k;break;}
+    if(!empty($r[$s])){$tk=$r[$t]??null;if(!$tk)foreach($r as$v)if(is_string($v)&&preg_match('/^[a-f0-9]{32,}$/i',$v)){$tk=$v;break;}if($tk)return$tk;}
+    if(!$q)echo"  ├─ ❌ Val err\n";
+  }
+  return false;
 }
 
-function urljoin($base, $rel) {
-    if (preg_match('#^[a-z][a-z0-9+.-]*://#i', $rel)) return $rel;
-    $parts = parse_url($base);
-    $scheme = $parts['scheme'] ?? 'https';
-    $host = $parts['host'] ?? '';
-    $port = isset($parts['port']) ? ':' . $parts['port'] : '';
-    if (strpos($rel, '/') === 0) {
-        return $scheme . '://' . $host . $port . $rel;
+function ev($html){$v=['token'=>null,'hash'=>null,'sub_id'=>null,'key'=>null];foreach(['token','hash','sub_id','key','api_key']as$k){$dk=$k==='api_key'?'key':$k;if(preg_match(sprintf('/(?:var|let|const)\s+%s\s*=\s*[\'"]([^\'"]+)[\'"]/',$k),$html,$m))$v[$dk]=$m[1];if(!$v[$dk]&&preg_match(sprintf('/data-%s\s*=\s*[\'"]([^\'"]+)[\'"]/',str_replace('_','-',$k)),$html,$m))$v[$dk]=$m[1];if(!$v[$dk]&&preg_match(sprintf('/"%s"\s*:\s*"([^"]+)"/',$k),$html,$m))$v[$dk]=$m[1];}return$v;}
+
+function pal($pg,$url,$n,$t,$ti,$rw,$q=false,$retry=1){global $UA;
+  for($attempt=0;$attempt<=$retry;$attempt++){
+    if($attempt>0){if(!$q)echo"  ├─ 🔄 Retry captcha...\n";sleep(2);}
+    $v=ev($pg);if(!$v['token']||!$v['hash']||!$v['sub_id']||!$v['key']){if(!$q)echo"  ├─ ❌ Missing vars\n";return false;}
+    $ct=null;
+    if(preg_match('/var\s+ctoken\s*=\s*[\'"]([^\'"]+)[\'"]/',$pg,$m))$ct=$m[1];
+    if(!$ct&&preg_match('/const\s+ctoken\s*=\s*[\'"]([^\'"]+)[\'"]/',$pg,$m))$ct=$m[1];
+    if(!$ct&&preg_match('/let\s+ctoken\s*=\s*[\'"]([^\'"]+)[\'"]/',$pg,$m))$ct=$m[1];
+    if(!$ct&&preg_match_all('/<input[^>]+type\s*=\s*["\']hidden["\'][^>]*name\s*=\s*["\']([^"\']+)["\']/i',$pg,$ms)){foreach($ms[1]as$n2){if(stripos($n2,'captcha')!==false||stripos($n2,'token')!==false||stripos($n2,'ctn')!==false||stripos($n2,'crtk')!==false){$ct=$n2;break;}}if(!$ct&&!empty($ms[1]))$ct=end($ms[1]);}
+    if(!$ct){if(!$q)echo"  ├─ ❌ No ctn field\n";return false;}
+    if(preg_match('/var (?:duration|timer)\s*=\s*(\d+);/',$pg,$m)){rq('POST',$url,['action'=>'start_view'],['X-Requested-With: XMLHttpRequest','Origin:https://bitcotasks.com','User-Agent:'.$UA],$url);timer((int)$m[1]);}elseif(!$q)echo"  ├─ Viewed ✅\n";
+    $tk=scap($url,$pg,$q,2);if(!$tk){if(!$q)echo"  ├─ ❌ Captcha fail\n";continue;}
+    $ad=['hash'=>$v['hash'],'sub_id'=>$v['sub_id'],'key'=>$v['key'],'token'=>$v['token'],$ct=>$tk,'action'=>'proccessLead'];
+    [$b,$e]=rq('POST','https://bitcotasks.com/system/ajax.php',$ad,['User-Agent:'.$UA,'Content-Type:application/x-www-form-urlencoded','Origin:https://bitcotasks.com'],$url);
+    if($e){if(!$q)echo"  ├─ ❌ Lead err\n";return false;}
+    $r=json_decode($b,true);if(!$r){if(!$q)echo"  ├─ ❌ Lead parse\n";return false;}
+    if(($r['status']??0)===200){echo"  ├─ ✅ ".strip_tags($r['message']??"+$rw")."\n";return true;}
+    $msg=strip_tags($r['message']??'');
+    if(stripos($msg,'captcha')!==false||stripos($msg,'invalid')!==false||stripos($msg,'expired')!==false){
+      if(!$q)echo"  ├─ ⚠️ $msg — retrying\n";continue;
     }
-    $path = isset($parts['path']) ? $parts['path'] : '/';
-    $dir = dirname($path);
-    if ($dir === '\\') $dir = '/';
-    $dir = str_replace('\\', '/', $dir);
-    return $scheme . '://' . $host . $port . rtrim($dir, '/') . '/' . $rel;
+    echo"  ├─ ❌ ".substr($msg,0,100)."\n";return false;
+  }
+  if(!$q)echo"  ├─ ❌ All retries failed\n";return false;
 }
 
-function displayBanner() {
-    $width = 54;
-    echo "╭" . str_repeat('─', $width) . "╮\n";
-    echo "│ BITCOTASKS BOT (PTC)" . str_repeat(' ', $width - 20) . "│\n";
-    echo "├" . str_repeat('─', $width) . "┤\n";
-    echo "│ 📱 TG: https://t.me/Scriptify1" . str_repeat(' ', $width - 39) . "│\n";
-    echo "│ 💻 Developer: Myra" . str_repeat(' ', $width - 33) . "│\n";
-    echo "╰" . str_repeat('─', $width) . "╯\n\n";
+function cw($p,$c,$w){$s=mb_strlen($c);return $p.$c.str_repeat(' ',max(0,$w-mb_strlen($p)-$s))."│\n";}
+function tr($t,$m){return mb_strlen($t)<=$t ? $t : mb_substr($t,0,$m-1)."…";}
+function ptc($tk,$ad,$bu,$n=1,$t=1){global $UA;$w=54;$ti=$ad['title']??'Unknown';$rw=$ad['reward']??'0';
+  echo "╭".str_repeat('─',$w)."╮\n";
+  echo cw("│ 🚀 AD $n/$t","",$w);
+  echo "├".str_repeat('─',$w)."┤\n";
+  echo cw("│ 📌 ",tr($ti,$w-4),$w);
+  echo cw("│ 💰 ",tr($rw,$w-4),$w);
+  echo cw("│  ","▶ Init...",$w);
+  [$b,$e]=rq('POST',$bu,['hash'=>$ad['hash'],'sid'=>$ad['sid']??'','key'=>$ad['key'],'type'=>'ptc','token'=>$tk,'action'=>'init_transaction'],['X-Requested-With: XMLHttpRequest','Origin:https://bitcotasks.com','User-Agent:'.$UA],$bu);$ok=false;if(!$e){$rs=json_decode($b,true);if($rs&&($rs['status']??0)!==999&&isset($rs['offer'])){$au=$rs['offer'];echo"\r\033[K";echo cw("│ ","▶ Init ✅",$w);echo cw("│  ","▶ Load...",$w);[$pg,$e2]=rq('GET',$au,null,['Accept:text/html','Accept-Language:en-GB,en;q=0.9','User-Agent:'.$UA],$bu);if(!$e2){echo"\r\033[K";echo cw("│ ","▶ Load ✅",$w);$ok=pal($pg,$au,$n,$t,$ti,$rw);}}}$s=$ok?'✅ DONE':'❌ FAILED';echo ($ok?"\r\033[K".cw("│ ","▶ Done ✅",$w):"").cw("│ ",tr($s,$w-2),$w)."╰".str_repeat('─',$w)."╯\n\n";return$ok;}
+function ploop($tk,$as,$bu){$sc=0;$fa=[];foreach($as as$i=>$a){$n=$i+1;if($i>0){$dl=rand(3,5);echo"\n  ├─ ⏳ Waiting {$dl}s before next ad...\n";sleep($dl);}echo"\n--- Ad $n/".count($as)." ---\n";if(ptc($tk,$a,$bu,$n,count($as)))$sc++;else $fa[]=$a;}return[$sc,$fa];}
+function eks($u){$p=parse_url($u);$k=$s=null;if(isset($p['query'])){parse_str($p['query'],$q);$k=$q['key']??null;$s=$q['sub_id']??null;}if(!$k||!$s){$pp=explode('/',trim($p['path']??'', '/'));if(count($pp)>=3&&$pp[0]==='offerwall'){$k=$pp[1];$s=$pp[2];}}return[$k,$s];}
+
+function fwBypass($ui,$bd,$h1,$maxRetry=2){
+  for($attempt=0;$attempt<=$maxRetry;$attempt++){
+    if($attempt>0){echo"  ├─ 🔄 Re-fetching page...\n";sleep(2);}
+    $fu=null;$r2=null;
+    if(strpos($ui,'firewall.php')!==false){
+      $fu=$ui;[$fb,$e]=rq('GET',$fu,null,$h1);
+      if($e){echo"❌ Fail: $e\n";continue;}
+      $r2=$fb;
+    }else{
+      [$r1,$e]=rq('GET',$ui,null,$h1,null,false,false);
+      if($e){echo"❌ Fail\n";continue;}
+      if(!preg_match("/window\.location\.href\s*=\s*['\"]([^'\"]+)['\"]/",$r1,$m)){echo"❌ No redirect\n";return null;}
+      [$r2,$e]=rq('GET',$m[1],null,$h1,$ui);
+      if($e){echo"❌ Redir fail\n";continue;}
+      $fu=$m[1];
+    }
+    if(!preg_match('/src="(\/captcha2\/[^"]+\.js\?[^"]+)"/',$r2,$m)){echo"❌ No JS\n";continue;}
+    if(!preg_match('/const\s+captchaTokenName\s*=\s*"([^"]+)"/',$r2,$m)){echo"❌ No ctn\n";continue;}
+    $ctn=$m[1];
+    $tk=scap($fu,$r2,false,2);
+    if(!$tk){echo"❌ Captcha fail\n";continue;}
+    echo"  ✅ Solved\n";
+    [$vr,$e]=rq('POST',$fu,['action'=>'validate',$ctn=>$tk],$h1);
+    if($e){echo"❌ Val fail\n";continue;}
+    $vj=json_decode($vr,true);
+    $ou=null;
+    if($vj&&($vj['status']??'')==='success'&&!empty($vj['redirect']))$ou=uj($bd,$vj['redirect']);
+    if(!$ou&&preg_match("/window\.location\.href\s*=\s*['\"]([^'\"]+)['\"]/",$vr,$m))$ou=uj($bd,$m[1]);
+    if(!$ou){echo"❌ No redirect\n";continue;}
+    return $ou;
+  }
+  return null;
 }
 
-function getApiKey() {
-    global $API_KEY;
-    $file = __DIR__ . '/' . API_KEY_FILE;
-    if (file_exists($file)) {
-        $content = trim(file_get_contents($file));
-        if ($content) {
-            $API_KEY = $content;
-            echo "✅ API key loaded from " . API_KEY_FILE . "\n";
-            return true;
-        }
-    }
-    echo "\n🔑 API Key Required\n";
-    echo "Get your free API key from: bypassallshortlinks.space\n";
-    echo "Enter your API key: ";
-    $API_KEY = trim(fgets(STDIN));
-    if (!$API_KEY) {
-        echo "❌ No API key provided. Exiting.\n";
-        return false;
-    }
-    file_put_contents($file, $API_KEY);
-    echo "✅ API key saved to " . API_KEY_FILE . "\n";
-    return true;
+function main(){
+  global $argv,$UA;
+  $ia=isset($argv)&&count($argv)>1&&!empty($argv[1]);
+  if(!$ia){system(strncasecmp(PHP_OS,'WIN',3)===0?'cls':'clear');$w=54;$bt="BITCOTASKS BOT";echo"╭".str_repeat('─',$w)."╮\n│ $bt".str_repeat(' ',max(0,$w-2-mb_strlen($bt)))."│\n╰".str_repeat('─',$w)."╯\n\n";}
+  if(file_exists(AK)){$c=trim(file_get_contents(AK));if($c){global $API_KEY;$API_KEY=$c;echo"✅ Key loaded\n";}}else{echo"🔑 Enter key: ";global $API_KEY;$API_KEY=trim(fgets(STDIN));if(!$API_KEY){echo"❌ Exit\n";return;}file_put_contents(AK,$API_KEY);}
+  $ui=$ia?trim($argv[1]):null;if(!$ui){echo"Link: ";$ui=trim(fgets(STDIN));}if(!$ui){echo"❌ No link\n";return;}
+  if(strpos($ui,'view/')!==false){echo"📌 Direct PTC\n";$h=['User-Agent:'.$UA,'Accept:text/html','Accept-Language:en-GB,en;q=0.9'];[$b,$e]=rq('GET',$ui,null,$h,null,false,false);if($e){echo"❌ Fail\n";return;}$lu=null;if(preg_match("/window\.location\.href\s*=\s*'([^']+)'/",$b,$m))$lu=$m[1];elseif(preg_match('/window\.location\.href\s*=\s*"([^"]+)"/',$b,$m))$lu=$m[1];if(!$lu){echo"❌ No redirect\n";return;}$lu=uj($ui,$lu);[$lp,$e]=rq('GET',$lu,null,$h,$ui);if($e){echo"❌ Fail\n";return;}$ti='PTC Ad';if(preg_match('/<title>([^<]+)<\/title>/i',$lp,$m))$ti=trim($m[1]);pal($lp,$lu,1,1,$ti,'0',false);return;}
+  $pd=parse_url($ui);$bd=$pd['scheme'].'://'.$pd['host'];[$bk,$si]=eks($ui);if(!$bk||!$si){echo"❌ No key/sub_id\n";return;}
+  echo"📌 Key:$bk Sub:$si\n\n🛡️ Firewall\n";
+  $h1=['User-Agent:'.$UA,'Accept:text/html','Accept-Language:en-GB,en;q=0.9'];
+  $ou=fwBypass($ui,$bd,$h1);if(!$ou){echo"❌ Firewall bypass failed\n";return;}
+  [$ob,$e]=rq('GET',$ou,null,$h1);if($e){echo"❌ OW fail\n";return;}
+  $ot=null;if(preg_match("/var\s+token\s*=\s*'([^']+)'/",$ob,$m))$ot=$m[1];if(!$ot){echo"❌ No OW token\n";return;}
+  echo"\n🚀 PTC offers...\n";
+  [$sb,$e]=rq('POST',$ou,['token'=>$ot,'action'=>'switch_cat','type'=>'ptc'],array_merge($h1,['Content-Type:application/x-www-form-urlencoded','Origin:https://bitcotasks.com','X-Requested-With:XMLHttpRequest']),$ou);if($e){echo"❌ Switch fail\n";return;}
+  $pt=json_decode($sb,true);if(!$pt){echo"❌ JSON err\n";return;}
+  $as=$pt['items']??[];echo"✅ ".count($as)." ads found\n".str_repeat('=',54)."\n";
+  [$sc,$fa]=ploop($ot,$as,$ou);
+  if($fa){echo"\n🔄 Retry ".count($fa)." failed\n";sleep(2);[$rs2,$sf]=ploop($ot,$fa,$ou);$sc+=$rs2;}
+  $w=54;$ss="✅ $sc/".count($as)." completed";echo"\n╭".str_repeat('─',$w)."╮\n│ $ss".str_repeat(' ',max(0,$w-2-mb_strlen($ss)))."│\n╰".str_repeat('─',$w)."╯\n\n";
 }
 
-function pngb64($p, $w, $h) {
-    if (empty($p)) return '';
-    $raw = base64_decode($p);
-    if ($raw === false) return '';
-    $img = imagecreatetruecolor($w, $h);
-    if (!$img) return '';
-    imagealphablending($img, false);
-    imagesavealpha($img, true);
-    $bytes = unpack('C*', $raw);
-    if (!$bytes) { imagedestroy($img); return ''; }
-    $bi = 1;
-    $total = $w * $h;
-    for ($i = 0; $i < $total; $i++) {
-        $x = $i % $w;
-        $y = (int)($i / $w);
-        $r = $bytes[$bi++] ?? 0;
-        $g = $bytes[$bi++] ?? 0;
-        $b_val = $bytes[$bi++] ?? 0;
-        $a = $bytes[$bi++] ?? 0;
-        if ($w < 64 && $a < 100) {
-            $color = imagecolorallocatealpha($img, 255, 255, 255, 127);
-        } else {
-            $gdAlpha = 127 - (int)(($a * 127) / 255);
-            $color = imagecolorallocatealpha($img, $r, $g, $b_val, $gdAlpha);
-        }
-        imagesetpixel($img, $x, $y, $color);
-    }
-    ob_start();
-    imagepng($img);
-    $result = base64_encode(ob_get_clean());
-    return $result;
-}
-
-function apiSolve($main, $options, $optDims, $quiet = false) {
-    global $API_KEY;
-    $mb = pngb64($main, 200, 100);
-    $obs = [];
-    foreach ($options as $idx => $opt) {
-        $dim = isset($optDims[$idx]) ? $optDims[$idx] : [32, 32];
-        $obs[] = pngb64($opt, $dim[0], $dim[1]);
-    }
-    $obs = array_pad($obs, 8, '');
-    $payload = ['api_key' => $API_KEY, 'action' => 'bitcotasks', 'main' => $mb, 'options' => $obs];
-
-    $ch = curl_init(API_URL);
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => json_encode($payload),
-        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => API_TIMEOUT,
-        CURLOPT_CONNECTTIMEOUT => CONNECTION_TIMEOUT,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_SSL_VERIFYHOST => false,
-    ]);
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-    if ($response === false) {
-        echo "  ├─ ⚠️ API timeout after " . API_TIMEOUT . "s\n";
-        return [null, null];
-    }
-    $data = json_decode($response, true);
-    if (!$data) return [null, null];
-
-    if (!empty($data['success']) || ($data['status'] ?? '') === 'success') {
-        if (isset($data['remaining_balance']) && !$quiet) {
-            echo "  ├─ 💰 Api balance: {$data['remaining_balance']} tokens\n";
-        }
-        $winner = $data['winner'] ?? null;
-        $target = $data['target'] ?? null;
-        return $winner !== null ? [(string)$winner, $target] : [null, null];
-    }
-    $errorStatus = $data['status'] ?? 'error';
-    $errorMsg = $data['error'] ?? 'Unknown error';
-    if ($errorStatus === 'insufficient_balance') {
-        echo "  ├─ ❌ Insufficient balance: $errorMsg\n";
-    } else {
-        echo "  ├─ ❌ API error: $errorMsg\n";
-    }
-    return [null, null];
-}
-
-function apiSolveClick($imageData, $quiet = false) {
-    global $API_KEY;
-    if (preg_match('#^data:image/[^;]+;base64,(.+)$#s', $imageData, $m)) {
-        $imageData = $m[1];
-    }
-    $baseUrl = 'https://bypassallshortlinks.space';
-    $submitPayload = ['key' => $API_KEY, 'method' => 'bitcotasks_click', 'image' => $imageData];
-    $ch = curl_init($baseUrl . '/in.php');
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => $submitPayload,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_CONNECTTIMEOUT => CONNECTION_TIMEOUT,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_SSL_VERIFYHOST => false,
-    ]);
-    $response = curl_exec($ch);
-    curl_close($ch);
-    if ($response === false) {
-        if (!$quiet) echo "  ├─ ⚠️ Click API submit failed\n";
-        return [null, null];
-    }
-
-    $taskId = null;
-    if (preg_match('/^OK\|(.+)$/s', trim($response), $m)) {
-        $taskId = trim($m[1]);
-    } else {
-        $submitData = json_decode($response, true);
-        if ($submitData && !empty($submitData['request'])) {
-            $taskId = $submitData['request'];
-        }
-    }
-    if (!$taskId) {
-        if (!$quiet) echo "  ├─ ❌ Click API submit error: " . substr($response, 0, 200) . "\n";
-        return [null, null];
-    }
-
-    for ($attempt = 0; $attempt < 40; $attempt++) {
-        sleep(3);
-        $pollUrl = $baseUrl . '/res.php?key=' . urlencode($API_KEY) . '&action=get&id=' . urlencode($taskId) . '&json=1';
-        $pCh = curl_init($pollUrl);
-        curl_setopt_array($pCh, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 15,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
-        ]);
-        $pollResp = curl_exec($pCh);
-        curl_close($pCh);
-        if ($pollResp === false) continue;
-        $pollResp = trim($pollResp);
-        if (preg_match('/^OK\|(.+)$/s', $pollResp, $m2)) {
-            $click = trim($m2[1]);
-            $parts = array_map('intval', explode(',', trim($click, '[] ')));
-            if (count($parts) >= 2) return [$parts[0], $parts[1]];
-            return [null, null];
-        }
-        $pollData = json_decode($pollResp, true);
-        if (!$pollData) continue;
-        if (isset($pollData['status']) && $pollData['status'] == 1) {
-            $click = $pollData['request'] ?? null;
-            if (isset($pollData['remaining_balance']) && !$quiet) {
-                echo "  ├─ 💰 Api balance: {$pollData['remaining_balance']} tokens\n";
-            }
-            if (is_string($click)) {
-                $click = trim($click, '[] ');
-                $parts = array_map('intval', explode(',', $click));
-                if (count($parts) >= 2) return [$parts[0], $parts[1]];
-            } elseif (is_array($click) && count($click) >= 2) {
-                return [(int)$click[0], (int)$click[1]];
-            }
-            return [null, null];
-        }
-        $req = $pollData['request'] ?? '';
-        if (strpos($req, 'ERROR') !== false) {
-            if (!$quiet) echo "  ├─ ❌ Click API error: $req\n";
-            return [null, null];
-        }
-    }
-    if (!$quiet) echo "  ├─ ⚠️ Click API poll timeout\n";
-    return [null, null];
-}
-
-function solvePow($c, $d) {
-    if (empty($c)) return null;
-    $p = str_repeat('0', (int)$d);
-    for ($n = 0; $n < 2000000; $n++) {
-        $h = hash('sha256', $c . ':' . $n);
-        if (strncmp($h, $p, strlen($p)) === 0) {
-            return ['nonce' => $n, 'hash' => $h];
-        }
-    }
-    return null;
-}
-
-function extractJsParams($js) {
-    $fn1 = $fv = $fn2 = $succ = $tokf = $pe = $ve = null;
-
-    if (preg_match('/var payload = "([^"]+)"/', $js, $m)) {
-        $parts = explode('&', $m[1]);
-        if (count($parts) >= 2) {
-            $a1 = explode('=', $parts[0]);
-            $a2 = explode('=', $parts[1]);
-            $fn1 = $a1[0];
-            $fv = $a1[1] ?? '';
-            $fn2 = $a2[0];
-        } else {
-            return null;
-        }
-    } else {
-        if (!preg_match('/var payload = "([^=]+)=([^&]+)&([^=]+)="/', $js, $m)) return null;
-        $fn1 = $m[1]; $fv = $m[2]; $fn2 = $m[3];
-    }
-
-    if (!preg_match('/if\s*\(response\.([A-Za-z0-9]+)\)/', $js, $m)) return null;
-    $succ = $m[1];
-    if (!preg_match('/value\s*=\s*response\.([A-Za-z0-9]+)/', $js, $m)) return null;
-    $tokf = $m[1];
-    if (!preg_match('#fetch\("(/captcha2/[^"]+\.js\?[^"]+)"#', $js, $m)) return null;
-    $pe = $m[1];
-    if (!preg_match('/xhr\.open\("POST",\s*"(\/captcha2\/[^"]+)"/', $js, $m)) return null;
-    $ve = $m[1];
-
-    return [$fn1, $fv, $fn2, $succ, $tokf, $pe, $ve];
-}
-
-function notifedCookie() {
-    $exp = (new DateTime("now", new DateTimeZone("GMT")))->modify("+30 minutes")->format("D, d M Y H:i:s") . " GMT";
-    $rand = substr(md5($exp), 2, 9);
-    return '_bitco_notifad=ad_value_' . $rand . '; _bitco_notifad_expire=expires=' . $exp;
-}
-
-function clearLine() {
-    echo "\r\033[K";
-}
-
-function showAdBox($current, $total, $title, $reward, $isRetry = false) {
-    $width = 54;
-    $tag = $isRetry ? ' [RETRY]' : '';
-    echo "╭" . str_repeat('─', $width) . "╮\n";
-    echo "│ 🚀 AD $current/$total$tag" . str_repeat(' ', $width - strlen("🚀 AD $current/$total$tag")) . "│\n";
-    echo "├" . str_repeat('─', $width) . "┤\n";
-    $shortTitle = mb_strlen($title) > 40 ? mb_substr($title, 0, 40) : $title;
-    echo "│ 📌 $shortTitle" . str_repeat(' ', $width - 4 - mb_strlen($shortTitle)) . "│\n";
-    echo "│ 💰 $reward" . str_repeat(' ', $width - 4 - mb_strlen($reward)) . "│\n";
-}
-
-function updateAdStatus($text, $success = null) {
-    $width = 54;
-    if ($success === true) {
-        clearLine();
-        $display = strpos($text, 'Verifying') !== false ? ' ▶ Verifying... ✅' : " ▶ $text ✅";
-        echo "│ $display" . str_repeat(' ', $width - mb_strlen($display)) . "│\n";
-    } elseif ($success === false) {
-        clearLine();
-        $display = strpos($text, 'Verifying') !== false ? ' ▶ Verifying... ❌' : " ▶ $text ❌";
-        echo "│ $display" . str_repeat(' ', $width - mb_strlen($display)) . "│\n";
-    } else {
-        echo "│  ▶ $text..." . str_repeat(' ', $width - 7 - mb_strlen($text)) . "│\n";
-    }
-}
-
-function completeAdBox($success = true) {
-    $width = 54;
-    $status = $success ? '' : '❌ FAILED';
-    echo "│ $status" . str_repeat(' ', $width - mb_strlen($status)) . "│\n";
-    echo "╰" . str_repeat('─', $width) . "╯\n\n";
-}
-
-function showRetryBanner($count) {
-    $width = 54;
-    echo "\n╭" . str_repeat('─', $width) . "╮\n";
-    echo "│ 🔄 RETRYING $count FAILED ADS" . str_repeat(' ', $width - mb_strlen("🔄 RETRYING $count FAILED ADS")) . "│\n";
-    echo "╰" . str_repeat('─', $width) . "╯\n\n";
-}
-
-function showSummaryBox($successCount, $totalCount, $earned = 0, $failedAds = []) {
-    $width = 54;
-    echo "\n╭" . str_repeat('─', $width) . "╮\n";
-    echo "│ 📊 FINAL SUMMARY" . str_repeat(' ', $width - 16) . "│\n";
-    echo "├" . str_repeat('─', $width) . "┤\n";
-    echo "│ ✅ Completed: $successCount/$totalCount" . str_repeat(' ', $width - mb_strlen("✅ Completed: $successCount/$totalCount")) . "│\n";
-    $earnedStr = number_format($earned, 2);
-    if (count($failedAds) > 0) {
-        echo "│ ❌ Permanently Failed: " . count($failedAds) . str_repeat(' ', $width - mb_strlen("❌ Permanently Failed: " . count($failedAds))) . "│\n";
-        echo "├" . str_repeat('─', $width) . "┤\n";
-        echo "│ Failed Ads:" . str_repeat(' ', $width - 12) . "│\n";
-        $count = 0;
-        foreach ($failedAds as $ad) {
-            if ($count >= 5) break;
-            $count++;
-            $shortTitle = mb_strlen($ad['title']) > 30 ? mb_substr($ad['title'], 0, 30) . '...' : $ad['title'];
-            $line = "$count. $shortTitle - {$ad['reward']}";
-            echo "│ $line" . str_repeat(' ', $width - mb_strlen($line) - 1) . "│\n";
-        }
-        if (count($failedAds) > 5) {
-            $line = "... and " . (count($failedAds) - 5) . " more";
-            echo "│ $line" . str_repeat(' ', $width - mb_strlen($line) - 1) . "│\n";
-        }
-    }
-    echo "├" . str_repeat('─', $width) . "┤\n";
-    echo "│ 📱 TG: t.me/bypassallshortlinks1" . str_repeat(' ', $width - 31) . "│\n";
-    echo "╰" . str_repeat('─', $width) . "╯\n\n";
-}
-
-function startTimer($seconds) {
-    for ($i = $seconds; $i >= 1; $i--) {
-        echo "\r\033[K" . str_pad("  ├─ ⏳ Waiting " . str_pad($i, 2, ' ', STR_PAD_LEFT) . "s...", 55);
-        flush();
-        if ($i > 1) sleep(1);
-    }
-    echo "\r\033[K" . str_pad("  ├─ Viewed ✅", 55) . "\n";
-    flush();
-}
-
-function sendStartView($url, $refererUrl) {
-    [$body, $err, $info] = request('POST', $url, ['action' => 'start_view'], [
-        'X-Requested-With: XMLHttpRequest',
-        'Origin: https://bitcotasks.com',
-        'User-Agent: ' . USER_AGENT,
-    ], $refererUrl);
-    return !$err;
-}
-
-function initPtcAd($adInfo, $token, $refererUrl) {
-    updateAdStatus('Initializing');
-    $data = [
-        'hash' => $adInfo['hash'],
-        'sid' => $adInfo['sid'] ?? '',
-        'key' => $adInfo['key'],
-        'type' => 'ptc',
-        'token' => $token,
-        'action' => 'init_transaction'
-    ];
-    [$body, $err, $info] = request('POST', $refererUrl, $data, [
-        'X-Requested-With: XMLHttpRequest',
-        'Origin: https://bitcotasks.com',
-        'User-Agent: ' . USER_AGENT,
-    ], $refererUrl);
-    if ($err) {
-        updateAdStatus('Initializing (Network error)', false);
-        return null;
-    }
-    $result = json_decode($body, true);
-    if (!$result) {
-        updateAdStatus('Initializing (No response)', false);
-        return null;
-    }
-    if (($result['status'] ?? 0) === 999) {
-        updateAdStatus('Initializing (Blocked)', false);
-        return null;
-    }
-    if (isset($result['offer'])) {
-        updateAdStatus('Initializing', true);
-        $offerUrl = $result['offer'];
-        if (!preg_match('#^https?://#i', $offerUrl)) {
-            $offerUrl = urljoin($refererUrl, $offerUrl);
-        }
-        return $offerUrl;
-    }
-    updateAdStatus('Initializing (No offer)', false);
-    return null;
-}
-
-function visitPtcAd($url, $refererUrl) {
-    updateAdStatus('Loading page');
-    [$body, $err, $info] = request('GET', $url, null, [
-        'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language: en-GB,en-US;q=0.9,en;q=0.8',
-        'Upgrade-Insecure-Requests: 1',
-        'User-Agent: ' . USER_AGENT,
-    ], $refererUrl);
-    if ($err) {
-        updateAdStatus("Loading page (Network error)", false);
-        return null;
-    }
-    updateAdStatus('Loading page', true);
-    return $body;
-}
-
-function processAdFromLeadPage($adPage, $actualAdUrl, $adNum, $totalAds, $title, $reward, $quiet = false) {
-    $token2 = null; $hash2 = null; $subId2 = null; $key2 = null;
-    $varPat = '/(?:var|let|const)\s+%s\s*=\s*[\'"]([^\'"]+)[\'"]/';
-    if (preg_match(sprintf($varPat, 'token'), $adPage, $m)) $token2 = $m[1];
-    if (preg_match(sprintf($varPat, 'hash'), $adPage, $m)) $hash2 = $m[1];
-    if (preg_match(sprintf($varPat, 'sub_id'), $adPage, $m)) $subId2 = $m[1];
-    if (preg_match(sprintf($varPat, 'api_key'), $adPage, $m)) $key2 = $m[1];
-    if (!$key2 && preg_match(sprintf($varPat, 'key'), $adPage, $m)) $key2 = $m[1];
-
-    if (!$token2 && preg_match('/data-token\s*=\s*[\'"]([^\'"]+)[\'"]/', $adPage, $m)) $token2 = $m[1];
-    if (!$hash2 && preg_match('/data-hash\s*=\s*[\'"]([^\'"]+)[\'"]/', $adPage, $m)) $hash2 = $m[1];
-    if (!$subId2 && preg_match('/data-sub-id\s*=\s*[\'"]([^\'"]+)[\'"]/', $adPage, $m)) $subId2 = $m[1];
-    if (!$key2 && preg_match('/data-key\s*=\s*[\'"]([^\'"]+)[\'"]/', $adPage, $m)) $key2 = $m[1];
-
-    if (!$token2 && preg_match('/"token"\s*:\s*"([^"]+)"/', $adPage, $m)) $token2 = $m[1];
-    if (!$hash2 && preg_match('/"hash"\s*:\s*"([^"]+)"/', $adPage, $m)) $hash2 = $m[1];
-    if (!$subId2 && preg_match('/"sub_id"\s*:\s*"([^"]+)"/', $adPage, $m)) $subId2 = $m[1];
-    if (!$key2 && preg_match('/"key"\s*:\s*"([^"]+)"/', $adPage, $m)) $key2 = $m[1];
-
-    if (!$token2 || !$hash2 || !$subId2 || !$key2) {
-        if (!$quiet) echo "  ├─ ❌ Could not extract page variables (token=" . ($token2 ?: 'null') . " hash=" . ($hash2 ?: 'null') . " sub_id=" . ($subId2 ?: 'null') . " key=" . ($key2 ?: 'null') . ")\n";
-        return false;
-    }
-
-    $ctn = null;
-    if (preg_match('/var\s+ctoken\s*=\s*[\'"]([^\'"]+)[\'"]/', $adPage, $m)) {
-        $ctn = $m[1];
-    }
-    if (!$ctn && preg_match('/const\s+ctoken\s*=\s*[\'"]([^\'"]+)[\'"]/', $adPage, $m)) {
-        $ctn = $m[1];
-    }
-    if (!$ctn && preg_match('/let\s+ctoken\s*=\s*[\'"]([^\'"]+)[\'"]/', $adPage, $m)) {
-        $ctn = $m[1];
-    }
-    if (!$ctn && preg_match('/const\s+captchaTokenName\s*=\s*"([^"]+)"/', $adPage, $m)) {
-        $val = $m[1];
-        if (strpos($val, '+') === false && strpos($val, 'ctoken') === false) {
-            $ctn = $val;
-        }
-    }
-    if (!$ctn && preg_match('/var\s+captchaTokenName\s*=\s*"([^"]+)"/', $adPage, $m)) {
-        $val = $m[1];
-        if (strpos($val, '+') === false && strpos($val, 'ctoken') === false) {
-            $ctn = $val;
-        }
-    }
-    if (!$ctn && preg_match('#var\s+captchaID\s*=\s*\$\(\'input\[name="([^"]+)"\]\'\)\.val\(\)#', $adPage, $m)) {
-        $ctn = $m[1];
-    }
-    if (!$ctn) {
-        if (preg_match_all('/<input[^>]+type\s*=\s*["\']hidden["\'][^>]*name\s*=\s*["\']([^"\']+)["\']/i', $adPage, $matches)) {
-            foreach ($matches[1] as $hn) {
-                if (stripos($hn, 'captcha') !== false || stripos($hn, 'token') !== false || stripos($hn, 'ctn') !== false || stripos($hn, 'recaptcha') !== false) {
-                    $ctn = $hn;
-                    break;
-                }
-            }
-            if (!$ctn && !empty($matches[1])) $ctn = end($matches[1]);
-        }
-    }
-    if (!$ctn && preg_match('/<input[^>]*name\s*=\s*"([^"]+)"[^>]*>/i', $adPage, $m)) {
-        $ctn = $m[1];
-    }
-    if (!$ctn) {
-        if (!$quiet) echo "  ├─ ❌ Could not find captcha input field\n";
-        return false;
-    }
-
-    if (preg_match('/var (?:duration|timer)\s*=\s*(\d+);/', $adPage, $m)) {
-        $duration = (int)$m[1];
-        sendStartView($actualAdUrl, $actualAdUrl);
-        startTimer($duration);
-    } elseif (!$quiet) {
-        echo str_pad("  ├─ Viewed ✅", 55) . "\n";
-    }
-
-    if (!preg_match('/src="(\/captcha2\/[^"]+\.js\?[^"]+)"/', $adPage, $m)) {
-        if (!$quiet) echo "  ├─ ❌ No captcha JS found in page\n";
-        return false;
-    }
-    $cjs = $m[1];
-    $cjsu = urljoin($actualAdUrl, $cjs);
-    $h = ['User-Agent: ' . USER_AGENT];
-    [$jsBody, $err] = request('GET', $cjsu, null, $h, $actualAdUrl);
-    if ($err) {
-        if (!$quiet) echo "  ├─ ❌ Failed to load captcha JS: $err\n";
-        return false;
-    }
-
-    $params = extractJsParams($jsBody);
-    if (!$params) {
-        if (!$quiet) echo "  ├─ ❌ Failed to extract captcha parameters\n";
-        return false;
-    }
-    [$fn1, $fv, $fn2, $succ, $tokf, $pe, $ve] = $params;
-
-    $pu = urljoin($actualAdUrl, $pe);
-    [$capData, $err] = request('POST', $pu, ['t' => (int)(microtime(true) * 1000), 'r' => mt_rand() / mt_getrandmax()],
-        array_merge($h, ['Content-Type: application/json']), $actualAdUrl, true);
-    if ($err) {
-        if (!$quiet) echo "  ├─ ❌ Failed to get captcha data: $err\n";
-        return false;
-    }
-    $d = json_decode($capData, true);
-    if (!$d) {
-        if (!$quiet) echo "  ├─ ❌ Failed to parse captcha data\n";
-        return false;
-    }
-
-    $clickMode = !empty($d['image']) && empty($d['options']);
-    if ($clickMode) {
-        [$cx, $cy] = apiSolveClick($d['image'], $quiet);
-        if ($cx === null) {
-            if (!$quiet) echo "  ├─ ❌ Captcha solve failed\n";
-            return false;
-        }
-        $clickCoords = [$cx, $cy];
-    } else {
-        $opx = [];
-        foreach ($d['options'] ?? [] as $o) $opx[] = $o['pixels'] ?? '';
-        $odm = [];
-        foreach ($d['options'] ?? [] as $o) $odm[] = [$o['width'] ?? 32, $o['height'] ?? 32];
-
-        [$sel] = apiSolve($d['pixel'] ?? '', $opx, $odm, $quiet);
-        if ($sel === null) {
-            if (!$quiet) echo "  ├─ ❌ Captcha solve failed\n";
-            return false;
-        }
-    }
-
-    $powData = !empty($d['challenge']) ? solvePow($d['challenge'], $d['difficulty'] ?? 4) : null;
-    $el = rand(3000, 8000);
-    $mv = rand(5, 15);
-    $cf = rand(300, 500);
-    $nonce = $powData['nonce'] ?? 0;
-    $challengeVal = $d['challenge'] ?? '';
-    $br = "$el:{$nonce}:{$challengeVal}";
-    $bh = hash('sha256', $br);
-
-    $vp = [];
-    $vp[$fn1] = $fv;
-    $vp[$fn2] = json_encode($clickMode ? $clickCoords : [(int)$sel]);
-    $vp['_et'] = (string)$el;
-    $vp['_mv'] = (string)$mv;
-    $vp['_cf'] = (string)$cf;
-    $vp['_pw'] = $powData ? json_encode($powData) : 'null';
-    $vp['_ch'] = $challengeVal;
-    $vp['_bh'] = $bh;
-
-    $vu = urljoin($actualAdUrl, $ve);
-    $vdParts = [];
-    foreach ($vp as $k => $v) $vdParts[] = urlencode($k) . '=' . urlencode($v);
-    $vd = implode('&', $vdParts);
-
-    [$valBody, $err] = request('POST', $vu, $vd, array_merge($h, ['Content-Type: application/x-www-form-urlencoded']), $actualAdUrl);
-    if ($err) {
-        if (!$quiet) echo "  ├─ ❌ Captcha validation failed: $err\n";
-        return false;
-    }
-    $resp = json_decode($valBody, true);
-    if (!$resp) {
-        if (!$quiet) echo "  ├─ ❌ Failed to parse validation response\n";
-        if (!$quiet) echo "  ├─ Raw: " . substr($valBody, 0, 200) . "\n";
-        return false;
-    }
-
-    $validationSuccess = false;
-    if (!empty($resp[$succ])) {
-        $validationSuccess = true;
-    } else {
-        foreach ($resp as $k => $v) {
-            if ($v === true) {
-                $succ = $k;
-                $validationSuccess = true;
-                break;
-            }
-        }
-    }
-    if (!$validationSuccess) {
-        if (!$quiet) echo "  ├─ ❌ Captcha validation returned failure: " . json_encode($resp) . "\n";
-        return false;
-    }
-
-    $captchaToken = $resp[$tokf] ?? null;
-    if (!$captchaToken) {
-        foreach ($resp as $k => $v) {
-            if (is_string($v) && preg_match('/^[a-f0-9]{32,}$/i', $v)) {
-                $captchaToken = $v;
-                break;
-            }
-        }
-    }
-    if (!$captchaToken) {
-        if (!$quiet) echo "  ├─ ❌ Could not extract captcha token from validation response\n";
-        if (!$quiet) echo "  ├─ Response: " . json_encode($resp) . "\n";
-        return false;
-    }
-
-    $ajaxData = [
-        'hash' => $hash2,
-        'sub_id' => $subId2,
-        'key' => $key2,
-        'token' => $token2,
-        $ctn => $captchaToken,
-        'action' => 'proccessLead'
-    ];
-
-    if (!$quiet) echo "  ├─ 🔍 Submitting lead (ctn=$ctn, token_len=" . strlen($captchaToken) . ")\n";
-    [$leadBody, $err] = request('POST', 'https://bitcotasks.com/system/ajax.php', $ajaxData, array_merge($h, [
-        'Content-Type: application/x-www-form-urlencoded',
-        'Origin: https://bitcotasks.com',
-    ]), $actualAdUrl);
-    if ($err) {
-        if (!$quiet) echo "  ├─ ❌ Failed to submit lead: $err\n";
-        return false;
-    }
-    $result = json_decode($leadBody, true);
-    if (!$result) {
-        if (!$quiet) echo "  ├─ ❌ Failed to parse lead response\n";
-        if ($leadBody && !$quiet) echo "  ├─ Response: " . substr($leadBody, 0, 200) . "\n";
-        return false;
-    }
-
-    if (($result['status'] ?? 0) === 200) {
-        $msg = strip_tags($result['message'] ?? "COMPLETED! +$reward");
-        echo ($quiet ? "  ├─ ✅ $msg\n" : "  ├─ ✅ $msg\n");
-        return true;
-    }
-    $errMsg = strip_tags($result['message'] ?? 'Unknown error');
-    $errStatus = $result['status'] ?? 'unknown';
-    echo "  ├─ ❌ Failed (status=$errStatus): " . substr($errMsg, 0, 150) . "\n";
-    return false;
-}
-
-function processPtcAd($token, $ad, $baseUrl, $adNum = 1, $totalAds = 1) {
-    $hid = $ad['hash'];
-    $aid = $ad['id'];
-    $sid = $ad['sid'] ?? '';
-    $key = $ad['key'];
-    $title = $ad['title'];
-    $reward = $ad['reward'] ?? '0';
-
-    showAdBox($adNum, $totalAds, $title, $reward);
-
-    $actualAdUrl = initPtcAd($ad, $token, $baseUrl);
-    if (!$actualAdUrl) {
-        completeAdBox(false);
-        return false;
-    }
-
-    $adPage = visitPtcAd($actualAdUrl, $baseUrl);
-    if (!$adPage) {
-        completeAdBox(false);
-        return false;
-    }
-
-    $success = processAdFromLeadPage($adPage, $actualAdUrl, $adNum, $totalAds, $title, $reward);
-    completeAdBox($success);
-    return $success;
-}
-
-function processDirectPtcLink($viewUrl) {
-    $headers = [
-        'User-Agent: ' . USER_AGENT,
-        'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language: en-GB,en-US;q=0.9,en;q=0.8'
-    ];
-
-    [$viewBody, $err] = request('GET', $viewUrl, null, $headers, null, false, false);
-    if ($err) {
-        echo "  ├─ ❌ Failed to load view page: $err\n";
-        return false;
-    }
-
-    $leadUrl = null;
-    if (preg_match("/window\.location\.href\s*=\s*'([^']+)'/", $viewBody, $m)) {
-        $leadUrl = $m[1];
-    } elseif (preg_match('/window\.location\.href\s*=\s*"([^"]+)"/', $viewBody, $m)) {
-        $leadUrl = $m[1];
-    }
-    if (!$leadUrl) {
-        echo "  ├─ ❌ No redirect found in view page\n";
-        return false;
-    }
-    $leadUrl = urljoin($viewUrl, $leadUrl);
-
-    [$leadPage, $err] = request('GET', $leadUrl, null, $headers, $viewUrl);
-    if ($err) {
-        echo "  ├─ ❌ Failed to load lead page: $err\n";
-        return false;
-    }
-
-    $title = 'Direct PTC Ad';
-    if (preg_match('/<title>([^<]+)<\/title>/i', $leadPage, $m)) {
-        $title = trim($m[1]);
-    }
-
-    echo "  📌 $title\n";
-    $success = processAdFromLeadPage($leadPage, $leadUrl, 1, 1, $title, '0', false);
-    return $success;
-}
-
-function processAdsLoop($token, $ads, $baseUrl, $isRetry = false) {
-    $successCount = 0;
-    $totalEarned = 0.0;
-    $failedAds = [];
-
-    foreach ($ads as $i => $ad) {
-        $num = $i + 1;
-        echo "\n--- Ad $num/" . count($ads) . " ---\n";
-        if (processPtcAd($token, $ad, $baseUrl, $num, count($ads))) {
-            $successCount++;
-            $rewardStr = preg_replace('/[^\d.]/', '', explode(' ', $ad['reward'] ?? '0')[0]);
-            $totalEarned += (float)$rewardStr;
-        } else {
-            $failedAds[] = $ad;
-        }
-        if ($i < count($ads) - 1) {
-            sleep(rand(3, 5));
-        }
-    }
-    return [$successCount, $totalEarned, $failedAds];
-}
-
-function extractKeySubidFromUrl($url) {
-    $parts = parse_url($url);
-    $key = null;
-    $subId = null;
-    if (isset($parts['query'])) {
-        parse_str($parts['query'], $query);
-        $key = $query['key'] ?? null;
-        $subId = $query['sub_id'] ?? null;
-    }
-    if (!$key || !$subId) {
-        $pathParts = explode('/', trim($parts['path'] ?? '', '/'));
-        if (count($pathParts) >= 3 && $pathParts[0] === 'offerwall') {
-            $key = $pathParts[1];
-            $subId = $pathParts[2];
-        }
-    }
-    return [$key, $subId];
-}
-
-function main() {
-    global $argv;
-    $argc = isset($argv) ? count($argv) : 0;
-
-    $interactive = !($argc > 1 && !empty($argv[1]));
-
-    if ($interactive) {
-        system(strncasecmp(PHP_OS, 'WIN', 3) === 0 ? 'cls' : 'clear');
-        displayBanner();
-    }
-    if (!getApiKey()) return;
-
-    define('USER_AGENT', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36');
-
-    if (!$interactive) {
-        $userInput = trim($argv[1]);
-    } else {
-        echo "\n📋 Enter offerwall / firewall / PTC view link:\n";
-        echo "╰─▶ ";
-        $userInput = trim(fgets(STDIN));
-    }
-    if (!$userInput) {
-        echo "❌ No link provided. Exiting.\n";
-        return;
-    }
-
-    $userInput = trim($userInput);
-
-    // Direct PTC view link — skip offerwall/firewall entirely
-    if (strpos($userInput, '/view/') !== false) {
-        echo "\n   📌 Direct PTC link detected\n";
-        processDirectPtcLink($userInput);
-        return;
-    }
-
-    $parsedUrl = parse_url($userInput);
-    $baseDomain = $parsedUrl['scheme'] . '://' . $parsedUrl['host'];
-
-    [$baseKey, $subId] = extractKeySubidFromUrl($userInput);
-
-    if (!$baseKey || !$subId) {
-        echo "❌ Could not extract key and sub_id from URL\n";
-        echo "   Supported formats:\n";
-        echo "   • https://bitcotasks.com/offerwall/KEY/SUB_ID\n";
-        echo "   • https://bitcotasks.com/offerwall/KEY/SUB_ID/HASH\n";
-        echo "   • https://bitcotasks.com/firewall.php?key=KEY&sub_id=SUB_ID\n";
-        echo "   • https://bitcotasks.com/view/HASH:ENCRYPTED (direct PTC link)\n";
-        return;
-    }
-
-    echo " │ 📌 Base Key: $baseKey, Sub ID: $subId\n";
-
-    echo "\n🛡️ Firewall Bypass\n";
-
-    $headers1 = [
-        'User-Agent: ' . USER_AGENT,
-        'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language: en-GB,en-US;q=0.9,en;q=0.8'
-    ];
-
-    if (strpos($userInput, 'firewall.php') !== false) {
-        $firewallPostUrl = $userInput;
-        $fu = $userInput;
-        [$firewallBody, $err] = request('GET', $firewallPostUrl, null, $headers1);
-        if ($err) { echo "❌ Failed to load firewall page: $err\n"; return; }
-        $firewallText = $firewallBody;
-
-        if (!preg_match('/src="(\/captcha2\/[^"]+\.js\?action=captcha)"/', $firewallText, $m)) {
-            echo "❌ Captcha JS not found\n";
-            return;
-        }
-        $cjs = urljoin($baseDomain, $m[1]);
-        $r2Text = $firewallText;
-    } else {
-        [$r1Body, $err] = request('GET', $userInput, null, $headers1, null, false, false);
-        if ($err) { echo "❌ Failed to load offerwall: $err\n"; return; }
-
-        if (!preg_match("/window\.location\.href\s*=\s*['\"]([^'\"]+)['\"]/", $r1Body, $m)) {
-            echo "❌ No redirect found\n";
-            return;
-        }
-        $loc = $m[1];
-
-        [$r2Body, $err] = request('GET', $loc, null, $headers1, $userInput);
-        if ($err) { echo "❌ Failed to follow redirect: $err\n"; return; }
-        $r2Text = $r2Body;
-
-        if (!preg_match('/src="(\/captcha2\/[^"]+\.js\?action=captcha)"/', $r2Text, $m)) {
-            echo "❌ Captcha JS not found\n";
-            return;
-        }
-        $cjs = urljoin($baseDomain, $m[1]);
-        $fu = $loc;
-        $firewallPostUrl = $baseDomain . '/firewall.php?key=' . $baseKey . '&sub_id=' . $subId;
-    }
-
-    if (!preg_match('/const\s+captchaTokenName\s*=\s*"([^"]+)"/', $r2Text, $m)) {
-        echo "❌ Could not find captcha token name\n";
-        return;
-    }
-    $ctn = $m[1];
-
-    [$jsBody, $err] = request('GET', $cjs, null, $headers1, $fu);
-    if ($err) { echo "❌ Failed to load captcha JS: $err\n"; return; }
-
-    $initParams = extractJsParams($jsBody);
-    if (!$initParams) { echo "❌ Failed to extract initial captcha parameters\n"; return; }
-    [$fn1, $fv, $fn2, $succ, $tokf, $pe, $ve] = $initParams;
-
-    $pu = urljoin($baseDomain, $pe);
-    [$capData, $err] = request('POST', $pu,
-        ['t' => (int)(microtime(true) * 1000), 'r' => mt_rand() / mt_getrandmax()],
-        array_merge($headers1, ['Content-Type: application/json']), $fu, true);
-    if ($err) { echo "❌ Failed to get captcha data: $err\n"; return; }
-    $d = json_decode($capData, true);
-    if (!$d) { echo "❌ Failed to parse captcha data\n"; return; }
-
-    $clickMode = !empty($d['image']) && empty($d['options']);
-    if ($clickMode) {
-        [$cx, $cy] = apiSolveClick($d['image']);
-        if ($cx === null) { echo "❌ Captcha solve failed\n"; return; }
-        $clickCoords = [$cx, $cy];
-        echo "   Captcha solved (click) ✅\n";
-    } else {
-        $opx = [];
-        foreach ($d['options'] ?? [] as $o) $opx[] = $o['pixels'] ?? '';
-        $odm = [];
-        foreach ($d['options'] ?? [] as $o) $odm[] = [$o['width'] ?? 32, $o['height'] ?? 32];
-
-        [$sel] = apiSolve($d['pixel'] ?? '', $opx, $odm);
-        if ($sel === null) { echo "❌ Captcha solve failed\n"; return; }
-        echo "   Captcha solved ✅\n";
-    }
-
-    $hasChallenge = !empty($d['challenge']);
-    $powData = $hasChallenge ? solvePow($d['challenge'], $d['difficulty'] ?? 4) : null;
-    $el = rand(3000, 8000);
-    $mv = rand(5, 15);
-    $cf = rand(300, 500);
-    $challengeVal = $d['challenge'] ?? '';
-    $nonce = $powData['nonce'] ?? 0;
-    $br = "$el:{$nonce}:{$challengeVal}";
-    $bh = hash('sha256', $br);
-
-    $vp = [];
-    $vp[$fn1] = $fv;
-    $vp[$fn2] = json_encode($clickMode ? $clickCoords : [(int)$sel]);
-    $vp['_et'] = (string)$el;
-    $vp['_mv'] = (string)$mv;
-    $vp['_cf'] = (string)$cf;
-    $vp['_pw'] = $powData ? json_encode($powData) : 'null';
-    $vp['_ch'] = $challengeVal;
-    $vp['_bh'] = $bh;
-
-    $vu = urljoin($baseDomain, $ve);
-    $vdParts = [];
-    foreach ($vp as $k => $v) $vdParts[] = urlencode($k) . '=' . urlencode($v);
-    $vd = implode('&', $vdParts);
-
-    [$valBody, $err] = request('POST', $vu, $vd,
-        array_merge($headers1, ['Content-Type: application/x-www-form-urlencoded']), $fu);
-    if ($err) { echo "❌ Validation failed: $err\n"; return; }
-    $resp = json_decode($valBody, true);
-    if (!$resp) { echo "❌ Failed to parse validation response\n"; return; }
-
-    if (empty($resp[$succ])) {
-        echo "❌ Validation failed\n";
-        echo "   Response: " . json_encode($resp) . "\n";
-        return;
-    }
-    $t = $resp[$tokf] ?? null;
-    if (!$t) { echo "❌ Could not extract token\n"; return; }
-
-    $validateData = ['action' => 'validate', $ctn => $t];
-    [$valResp, $err] = request('POST', $fu, $validateData, $headers1);
-    if ($err) { echo "❌ Token validation failed: $err\n"; return; }
-
-    $offerwallUrl = null;
-    $valJson = json_decode($valResp, true);
-    if ($valJson && ($valJson['status'] ?? '') === 'success' && !empty($valJson['redirect'])) {
-        $offerwallUrl = urljoin($baseDomain, $valJson['redirect']);
-        echo "   Redirect found (JSON): " . substr($offerwallUrl, 0, 80) . "...\n";
-    }
-    if (!$offerwallUrl) {
-        if (preg_match("/window\.location\.href\s*=\s*['\"]([^'\"]+)['\"]/", $valResp, $m)) {
-            $offerwallUrl = urljoin($baseDomain, $m[1]);
-            echo "   Redirect found (HTML): " . substr($offerwallUrl, 0, 80) . "...\n";
-        }
-    }
-    if (!$offerwallUrl) {
-        echo "❌ No redirect after validation\n";
-        echo "   Response preview: " . substr($valResp, 0, 200) . "\n";
-        return;
-    }
-
-    [$owBody, $err] = request('GET', $offerwallUrl, null, $headers1);
-    if ($err) { echo "❌ Failed to load offerwall: $err\n"; return; }
-
-    $offerwallToken = null;
-    if (preg_match("/var\s+token\s*=\s*'([^']+)'/", $owBody, $m)) {
-        $offerwallToken = $m[1];
-    }
-    if (!$offerwallToken) { echo "❌ Could not extract offerwall token\n"; return; }
-
-    echo "\n🚀 Loading PTC offers...\n";
-    $switchHeaders = array_merge($headers1, [
-        'Authority: bitcotasks.com',
-        'Content-Type: application/x-www-form-urlencoded',
-        'Origin: https://bitcotasks.com',
-        'X-Requested-With: XMLHttpRequest'
-    ]);
-    $switchData = ['token' => $offerwallToken, 'action' => 'switch_cat', 'type' => 'ptc'];
-
-    [$switchBody, $err] = request('POST', $offerwallUrl, $switchData, $switchHeaders, $offerwallUrl);
-    if ($err) { echo "❌ Switch failed: $err\n"; return; }
-
-    $ptcData = json_decode($switchBody, true);
-    if (!$ptcData) { echo "❌ Invalid JSON response from switch\n"; return; }
-
-    $ads = $ptcData['items'] ?? [];
-    echo "✅ Found " . count($ads) . " PTC ads\n";
-
-    echo "\n" . str_repeat('=', 60) . "\n";
-    echo "PROCESSING PTC ADS\n";
-    echo str_repeat('=', 60) . "\n";
-
-    [$successCount, $totalEarned, $failedAds] = processAdsLoop($offerwallToken, $ads, $offerwallUrl);
-
-    if (count($failedAds) > 0) {
-        showRetryBanner(count($failedAds));
-        sleep(2);
-        [$retrySuccess, $retryEarned, $stillFailed] = processAdsLoop($offerwallToken, $failedAds, $offerwallUrl, true);
-        $successCount += $retrySuccess;
-        $totalEarned += $retryEarned;
-        $failedAds = $stillFailed;
-    }
-
-    showSummaryBox($successCount, count($ads), $totalEarned, $failedAds);
-}
-
-if (!defined('BC_INCLUDED')) {
-    main();
-}
+if(!defined('BC_INCLUDED'))main();
