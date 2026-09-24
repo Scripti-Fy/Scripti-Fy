@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Session Creator for GVM Bot
+Session Creator for Paidz Bot
 Creates only .session files without any claiming logic
 """
 
@@ -66,7 +66,7 @@ def cleanup_corrupted_session(session_path):
 
 async def create_session():
     print(f"{C}\n╔══════════════════════════════════════════╗")
-    print(f"║       GVM SESSION CREATOR         ║")
+    print(f"║       Paidz SESSION CREATOR         ║")
     print(f"╚══════════════════════════════════════════╝{D}\n")
     
     # Check directory permissions
@@ -209,7 +209,7 @@ async def fix_sessions():
 
 async def main():
     print(f"{C}\n╔══════════════════════════════════════════╗")
-    print(f"║       GVM SESSION MANAGER          ║")
+    print(f"║       Paidz SESSION MANAGER          ║")
     print(f"╚══════════════════════════════════════════╝{D}\n")
     
     if not ensure_session_dir():
